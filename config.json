@@ -1,4 +1,16 @@
 {
-  "routes": ["Red"],
-  "stops": ["place-pktrm"]
+  "route_configs": [
+    {
+      "route_id": "Red",
+      "stop_ids": ["place-harsq", "place-cntsq", "place-knncl"]
+    },
+    {
+      "route_id": "Orange",
+      "stop_ids": ["place-north", "place-haecl"]
+    },
+    {
+      "route_id": "Green-B",
+      "stop_ids": ["place-pktrm", "place-gover"]
+    }
+  ]
 } 
