@@ -35,10 +35,13 @@ class RouteConfig(BaseModel):
 
 # Schedule prediction model
 class Prediction(BaseModel):
+    """Schedule prediction model"""
     route_id: str
     stop_id: str
     arrival_time: Optional[str]
     departure_time: Optional[str]
+    direction_id: int
+    status: Optional[str]
 
 # Global configuration
 CONFIG_FILE = "config.json"
@@ -121,10 +124,34 @@ async def fetch_predictions(route_id: str) -> List[Prediction]:
                         route_id=pred["relationships"]["route"]["data"]["id"],
                         stop_id=pred["relationships"]["stop"]["data"]["id"],
                         arrival_time=attributes.get("arrival_time"),
-                        departure_time=attributes.get("departure_time")
+                        departure_time=attributes.get("departure_time"),
+                        direction_id=attributes.get("direction_id", 0),
+                        status=attributes.get("status")
                     )
                 )
             return predictions
+
+async def get_stop_locations(route_id: str) -> dict:
+    """Fetch all stops with their locations for a given route."""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{MBTA_API_BASE}/stops",
+            params={
+                "filter[route]": route_id,
+                "include": "route"
+            },
+            headers=HEADERS
+        ) as response:
+            if response.status != 200:
+                return {}
+            data = await response.json()
+            return {
+                stop["attributes"]["name"]: {
+                    "latitude": stop["attributes"]["latitude"],
+                    "longitude": stop["attributes"]["longitude"]
+                }
+                for stop in data.get("data", [])
+            }
 
 async def update_trmnl_display(predictions: List[Prediction]):
     """Send updates to TRMNL display via webhook."""
@@ -135,28 +162,42 @@ async def update_trmnl_display(predictions: List[Prediction]):
     config = load_config()
     print(f"Current route config: {config.route_id}")
     
-    # Get next arrival for each stop
+    # Get predictions for each stop and direction
     stop_predictions = {}
     for pred in predictions:
         departure = pred.departure_time or pred.arrival_time
         if departure:
             dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
             stop_name = await get_stop_info(pred.stop_id)
+            direction = "inbound" if pred.direction_id == 1 else "outbound"
             
-            # Only keep the earliest prediction for each stop
-            if stop_name not in stop_predictions or dt.timestamp() < stop_predictions[stop_name]["timestamp"]:
+            if stop_name not in stop_predictions:
                 stop_predictions[stop_name] = {
                     "stop_name": stop_name,
-                    "time": dt.strftime("%I:%M %p"),
-                    "timestamp": dt.timestamp()
+                    "inbound": [],
+                    "outbound": []
                 }
+            
+            if len(stop_predictions[stop_name][direction]) < 3:  # Keep only 3 predictions per direction
+                stop_predictions[stop_name][direction].append({
+                    "time": dt.strftime("%I:%M %p"),
+                    "status": pred.status or "Scheduled"
+                })
     
-    # Sort stops by time
-    sorted_stops = sorted(
-        stop_predictions.values(),
-        key=lambda x: x["timestamp"]
-    )
-
+    # Get stop locations and determine line direction
+    stop_locations = await get_stop_locations(config.route_id)
+    if stop_locations:
+        # Find the most northern and southern stops to determine direction
+        stops_by_lat = sorted(stop_locations.items(), key=lambda x: x[1]["latitude"])
+        north_stop = stops_by_lat[-1][0]
+        south_stop = stops_by_lat[0][0]
+        
+        # Sort stops from north to south
+        sorted_stops = sorted(
+            stop_predictions.values(),
+            key=lambda x: -stop_locations.get(x["stop_name"], {"latitude": 0})["latitude"]
+        )
+    
     # Create numbered variables for each stop
     merge_vars = {
         "line_name": config.route_id,
@@ -164,10 +205,17 @@ async def update_trmnl_display(predictions: List[Prediction]):
         "last_updated": datetime.now().strftime("%I:%M %p")
     }
     
-    # Add numbered stop variables
+    # Add numbered stop variables with inbound/outbound times
     for i, stop in enumerate(sorted_stops):
         merge_vars[f"stop_{i}_name"] = stop["stop_name"]
-        merge_vars[f"stop_{i}_time"] = stop["time"]
+        
+        # Add inbound times without status
+        for j, pred in enumerate(stop["inbound"][:3], 1):
+            merge_vars[f"stop_{i}_inbound_{j}"] = pred['time']
+        
+        # Add outbound times without status
+        for j, pred in enumerate(stop["outbound"][:3], 1):
+            merge_vars[f"stop_{i}_outbound_{j}"] = pred['time']
     
     merge_vars["stop_count"] = len(sorted_stops)
 
@@ -205,6 +253,34 @@ def get_line_color(route_id: str) -> str:
         "Blue": "#2F5DA6"
     }
     return colors.get(route_id, "#666666")  # Default gray if line not found
+
+def get_stop_order(route_id: str) -> dict:
+    """Return the order of stops for a given line."""
+    orders = {
+        "Orange": [
+            "Oak Grove", 
+            "Malden Center",
+            "Wellington",
+            "Assembly",
+            "Sullivan Square",
+            "Community College",
+            "North Station",
+            "Haymarket",
+            "State",
+            "Downtown Crossing",
+            "Chinatown",
+            "Tufts Medical Center",
+            "Back Bay",
+            "Massachusetts Avenue",
+            "Ruggles",
+            "Roxbury Crossing",
+            "Jackson Square",
+            "Stony Brook",
+            "Green Street",
+            "Forest Hills"
+        ]
+    }
+    return {stop: idx for idx, stop in enumerate(orders.get(route_id, []))}
 
 @app.get("/config", response_model=RouteConfig)
 async def get_config():
