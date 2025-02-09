@@ -46,6 +46,9 @@ MBTA_API_KEY = os.getenv("MBTA_API_KEY")
 TRMNL_WEBHOOK_URL = os.getenv("TRMNL_WEBHOOK_URL")
 MBTA_API_BASE = "https://api-v3.mbta.com"
 
+# Print webhook URL for debugging
+print("TRMNL Webhook URL:", TRMNL_WEBHOOK_URL)
+
 # Headers for MBTA API
 HEADERS = {"x-api-key": MBTA_API_KEY} if MBTA_API_KEY else {}
 
@@ -130,6 +133,7 @@ async def update_trmnl_display(predictions: List[Prediction]):
         raise HTTPException(status_code=500, detail="TRMNL webhook URL not configured")
     
     config = load_config()
+    print(f"Current route config: {config.route_id}")
     
     # Get next arrival for each stop
     stop_predictions = {}
@@ -137,30 +141,54 @@ async def update_trmnl_display(predictions: List[Prediction]):
         departure = pred.departure_time or pred.arrival_time
         if departure:
             dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
-            if pred.stop_id not in stop_predictions:
-                stop_name = await get_stop_info(pred.stop_id)
-                stop_predictions[pred.stop_id] = {
+            stop_name = await get_stop_info(pred.stop_id)
+            
+            # Only keep the earliest prediction for each stop
+            if stop_name not in stop_predictions or dt.timestamp() < stop_predictions[stop_name]["timestamp"]:
+                stop_predictions[stop_name] = {
                     "stop_name": stop_name,
-                    "time": dt.strftime("%I:%M %p")
+                    "time": dt.strftime("%I:%M %p"),
+                    "timestamp": dt.timestamp()
                 }
     
-    template_data = {
-        "route_id": config.route_id,
-        "stops": list(stop_predictions.values()),
+    # Sort stops by time
+    sorted_stops = sorted(
+        stop_predictions.values(),
+        key=lambda x: x["timestamp"]
+    )
+
+    # Create numbered variables for each stop
+    merge_vars = {
         "last_updated": datetime.now().strftime("%I:%M %p")
+    }
+    
+    for i, stop in enumerate(sorted_stops):
+        merge_vars[f"stop_{i}_name"] = stop["stop_name"]
+        merge_vars[f"stop_{i}_time"] = stop["time"]
+    
+    merge_vars["stop_count"] = len(sorted_stops)
+
+    template_data = {
+        "merge_variables": merge_vars
     }
     
     print(f"Sending update to TRMNL: {template_data}")
     
     async with aiohttp.ClientSession() as session:
-        response = await session.post(
-            TRMNL_WEBHOOK_URL,
-            json=template_data
-        )
-        print(f"TRMNL response status: {response.status}")
-        if response.status != 200:
+        try:
+            response = await session.post(
+                TRMNL_WEBHOOK_URL,
+                json=template_data,
+                headers={"Content-Type": "application/json"}
+            )
+            print(f"TRMNL response status: {response.status}")
             response_text = await response.text()
-            print(f"TRMNL error response: {response_text}")
+            print(f"TRMNL response body: {response_text}")
+            
+            if response.status != 200:
+                print(f"TRMNL error response: {response_text}")
+        except Exception as e:
+            print(f"Error sending to TRMNL: {str(e)}")
 
 @app.get("/config", response_model=RouteConfig)
 async def get_config():

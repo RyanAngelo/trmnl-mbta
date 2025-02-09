@@ -1,102 +1,56 @@
-<style>
-    body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        margin: 20px;
-        background: #1a1a1a;
-        color: #ffffff;
-    }
-    
-    .line-header {
-        font-size: 2em;
-        font-weight: bold;
-        margin-bottom: 30px;
-        text-align: center;
-    }
-    
-    .line-Red { color: #FA2D27; }
-    .line-Orange { color: #FFA500; }
-    .line-Green-B { color: #00843D; }
-    .line-Blue { color: #2F5DA6; }
-    
-    .timeline {
-        position: relative;
-        max-width: 600px;
-        margin: 0 auto;
-        padding-left: 50px;
-    }
-    
-    .timeline::before {
-        content: '';
-        position: absolute;
-        left: 20px;
-        top: 0;
-        bottom: 0;
-        width: 4px;
-        background: currentColor;
-        border-radius: 2px;
-    }
-    
-    .stop-item {
-        position: relative;
-        margin-bottom: 30px;
-        padding-left: 20px;
-    }
-    
-    .stop-item::before {
-        content: '';
-        position: absolute;
-        left: -42px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 16px;
-        height: 16px;
-        background: currentColor;
-        border: 4px solid #1a1a1a;
-        border-radius: 50%;
-    }
-    
-    .stop-name {
-        font-size: 1.2em;
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-    
-    .arrival-time {
-        color: #888;
-        font-size: 1.1em;
-    }
-    
-    .updated-time {
-        text-align: center;
-        color: #888;
-        font-size: 0.9em;
-        margin-top: 40px;
-    }
-    
-    .no-predictions {
-        text-align: center;
-        color: #888;
-        font-style: italic;
-        margin: 20px 0;
-    }
-</style>
-
-<div class="line-header line-{{route_id}}">
-    {{route_id}} Line
-</div>
-
-<div class="timeline line-{{route_id}}">
-    {{#stops}}
-    <div class="stop-item">
-        <div class="stop-name">{{stop_name}}</div>
-        <div class="arrival-time">{{time}}</div>
+<div style="font-family: system-ui; margin: 20px; background: #ffffff; color: #333333;">
+    <div style="font-size: 2em; font-weight: bold; margin-bottom: 20px; text-align: center; color: #FA2D27;">
+        Red Line Schedule
     </div>
-    {{/stops}}
-    {{^stops}}
-    <div class="no-predictions">No predictions available</div>
-    {{/stops}}
-</div>
 
-<div class="updated-time">
-    Last Updated: {{last_updated}}
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <th style="text-align: left; padding: 6px 10px; color: #666; font-size: 0.9em;">Stop</th>
+            <th style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.9em;">Next Train</th>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_0_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_0_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_1_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_1_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_2_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_2_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_3_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_3_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_4_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_4_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_5_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_5_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_6_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_6_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_7_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_7_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_8_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_8_time}}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="text-align: left; padding: 6px 10px; color: #333333; font-size: 0.95em;">{{stop_9_name}}</td>
+            <td style="text-align: right; padding: 6px 10px; color: #666; font-size: 0.95em;">{{stop_9_time}}</td>
+        </tr>
+    </table>
+
+    <div style="text-align: center; color: #666; font-size: 0.9em; margin-top: 15px;">
+        Last Updated: {{last_updated}}
+    </div>
 </div>
