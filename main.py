@@ -159,9 +159,12 @@ async def update_trmnl_display(predictions: List[Prediction]):
 
     # Create numbered variables for each stop
     merge_vars = {
+        "line_name": config.route_id,
+        "line_color": get_line_color(config.route_id),
         "last_updated": datetime.now().strftime("%I:%M %p")
     }
     
+    # Add numbered stop variables
     for i, stop in enumerate(sorted_stops):
         merge_vars[f"stop_{i}_name"] = stop["stop_name"]
         merge_vars[f"stop_{i}_time"] = stop["time"]
@@ -189,6 +192,19 @@ async def update_trmnl_display(predictions: List[Prediction]):
                 print(f"TRMNL error response: {response_text}")
         except Exception as e:
             print(f"Error sending to TRMNL: {str(e)}")
+
+def get_line_color(route_id: str) -> str:
+    """Return the color code for a given MBTA line."""
+    colors = {
+        "Red": "#FA2D27",
+        "Orange": "#FFA500",
+        "Green-B": "#00843D",
+        "Green-C": "#00843D",
+        "Green-D": "#00843D",
+        "Green-E": "#00843D",
+        "Blue": "#2F5DA6"
+    }
+    return colors.get(route_id, "#666666")  # Default gray if line not found
 
 @app.get("/config", response_model=RouteConfig)
 async def get_config():
