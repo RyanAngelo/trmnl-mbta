@@ -7,31 +7,31 @@ from dotenv import load_dotenv
 import aiohttp
 from datetime import datetime
 from pathlib import Path
+import asyncio
+from contextlib import asynccontextmanager
 
 # Load environment variables
 load_dotenv()
 
 # Initialize FastAPI app
-app = FastAPI(title="TRMNL MBTA Schedule Display")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager for FastAPI app"""
+    # Start update loop on startup
+    task = asyncio.create_task(update_loop())
+    yield
+    # Cancel update loop on shutdown
+    task.cancel()
+
+app = FastAPI(
+    title="TRMNL MBTA Schedule Display",
+    lifespan=lifespan
+)
 
 # Configuration model
-class RouteStops(BaseModel):
-    """Model for a route and its associated stops"""
-    route_id: str
-    stop_ids: List[str]
-
 class RouteConfig(BaseModel):
-    """Configuration model mapping routes to their stops"""
-    route_configs: List[RouteStops]
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        if len(self.route_configs) > 5:
-            raise ValueError("Maximum of 5 routes allowed")
-        
-        # Ensure lists are unique while preserving order
-        for route_config in self.route_configs:
-            route_config.stop_ids = list(dict.fromkeys(route_config.stop_ids))
+    """Configuration model for a single route"""
+    route_id: str
 
 # Schedule prediction model
 class Prediction(BaseModel):
@@ -55,7 +55,7 @@ def load_config() -> RouteConfig:
         with open(CONFIG_FILE, "r") as f:
             return RouteConfig(**json.load(f))
     except FileNotFoundError:
-        default_config = RouteConfig(route_configs=[])
+        default_config = RouteConfig(route_id="")
         save_config(default_config)
         return default_config
 
@@ -76,15 +76,26 @@ async def get_stop_info(stop_id: str) -> str:
             data = await response.json()
             return data.get("data", {}).get("attributes", {}).get("name", stop_id)
 
-async def fetch_predictions(route_configs: List[RouteStops]) -> List[Prediction]:
+async def get_route_stops(route_id: str) -> List[str]:
+    """Fetch all stops for a given route from MBTA API."""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{MBTA_API_BASE}/stops",
+            params={"filter[route]": route_id},
+            headers=HEADERS
+        ) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=response.status, detail="MBTA API error")
+            data = await response.json()
+            return [stop["id"] for stop in data.get("data", [])]
+
+async def fetch_predictions(route_id: str) -> List[Prediction]:
     """Fetch predictions from MBTA API."""
-    # Flatten route and stop IDs while maintaining association
-    route_ids = [rc.route_id for rc in route_configs]
-    stop_ids = [stop_id for rc in route_configs for stop_id in rc.stop_ids]
+    stops = await get_route_stops(route_id)
     
     params = {
-        "filter[route]": ",".join(route_ids),
-        "filter[stop]": ",".join(stop_ids),
+        "filter[route]": route_id,
+        "filter[stop]": ",".join(stops),
         "sort": "departure_time",
         "include": "route,stop"
     }
@@ -115,58 +126,41 @@ async def fetch_predictions(route_configs: List[RouteStops]) -> List[Prediction]
 async def update_trmnl_display(predictions: List[Prediction]):
     """Send updates to TRMNL display via webhook."""
     if not TRMNL_WEBHOOK_URL:
+        print("Error: TRMNL webhook URL not configured")
         raise HTTPException(status_code=500, detail="TRMNL webhook URL not configured")
     
     config = load_config()
     
-    # Group predictions by route
-    route_predictions = {}
+    # Get next arrival for each stop
+    stop_predictions = {}
     for pred in predictions:
-        if pred.route_id not in route_predictions:
-            route_predictions[pred.route_id] = []
-        
         departure = pred.departure_time or pred.arrival_time
         if departure:
             dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
-            stop_name = await get_stop_info(pred.stop_id)
-            route_predictions[pred.route_id].append({
-                "stop_id": pred.stop_id,
-                "stop_name": stop_name,
-                "time": dt.strftime("%I:%M %p")
-            })
-    
-    # Sort predictions according to config order
-    formatted_routes = []
-    for route_config in config.route_configs:
-        route_id = route_config.route_id
-        if route_id in route_predictions:
-            # Sort stops according to config order
-            stops = route_predictions[route_id]
-            def get_stop_sort_key(stop):
-                try:
-                    return (route_config.stop_ids.index(stop["stop_id"]), stop["time"])
-                except ValueError:
-                    return (float('inf'), stop["time"])
-            
-            stops.sort(key=get_stop_sort_key)
-            
-            formatted_routes.append({
-                "route_id": route_id,
-                "stops": stops
-            })
+            if pred.stop_id not in stop_predictions:
+                stop_name = await get_stop_info(pred.stop_id)
+                stop_predictions[pred.stop_id] = {
+                    "stop_name": stop_name,
+                    "time": dt.strftime("%I:%M %p")
+                }
     
     template_data = {
-        "routes": formatted_routes,
-        "last_updated": datetime.now().strftime("%I:%M %p"),
-        "total_predictions": sum(len(route["stops"]) for route in formatted_routes)
+        "route_id": config.route_id,
+        "stops": list(stop_predictions.values()),
+        "last_updated": datetime.now().strftime("%I:%M %p")
     }
     
-    # Send to TRMNL
+    print(f"Sending update to TRMNL: {template_data}")
+    
     async with aiohttp.ClientSession() as session:
-        await session.post(
+        response = await session.post(
             TRMNL_WEBHOOK_URL,
             json=template_data
         )
+        print(f"TRMNL response status: {response.status}")
+        if response.status != 200:
+            response_text = await response.text()
+            print(f"TRMNL error response: {response_text}")
 
 @app.get("/config", response_model=RouteConfig)
 async def get_config():
@@ -176,23 +170,35 @@ async def get_config():
 @app.post("/config")
 async def update_config(config: RouteConfig):
     """Update configuration."""
-    # Additional validation in case the model validation is bypassed
-    if len(config.route_configs) > 5:
-        raise HTTPException(
-            status_code=400,
-            detail="Maximum of 5 routes allowed"
-        )
     save_config(config)
-    return {"status": "success", "routes_configured": len(config.route_configs)}
+    return {"status": "success", "route": config.route_id}
 
 @app.post("/webhook/update")
 async def update_schedule():
     """Manually trigger an update of the schedule display."""
     config = load_config()
-    predictions = await fetch_predictions(config.route_configs)
+    predictions = await fetch_predictions(config.route_id)
     await update_trmnl_display(predictions)
     return {"status": "success", "predictions_count": len(predictions)}
 
+async def update_loop():
+    """Main loop to update the display periodically"""
+    while True:
+        try:
+            print("Fetching new predictions...")
+            config = load_config()
+            predictions = await fetch_predictions(config.route_id)
+            print(f"Got {len(predictions)} predictions")
+            await update_trmnl_display(predictions)
+            await asyncio.sleep(30)
+        except Exception as e:
+            print(f"Error in update loop: {str(e)}")
+            await asyncio.sleep(5)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
 # Create default config file if it doesn't exist
 if not os.path.exists(CONFIG_FILE):
-    save_config(RouteConfig(route_configs=[])) 
+    save_config(RouteConfig(route_id="")) 
