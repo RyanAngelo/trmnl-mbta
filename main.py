@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 import asyncio
 from contextlib import asynccontextmanager
+import argparse
 
 # Load environment variables
 load_dotenv()
@@ -315,9 +316,32 @@ async def update_loop():
             print(f"Error in update loop: {str(e)}")
             await asyncio.sleep(5)
 
+async def run_once():
+    """Run a single update and exit."""
+    try:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n[{current_time}] Starting update...")
+        config = load_config()
+        predictions = await fetch_predictions(config.route_id)
+        print(f"Got {len(predictions)} predictions")
+        await update_trmnl_display(predictions)
+        print("Update complete")
+    except Exception as e:
+        print(f"Error in update: {str(e)}")
+        raise e
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    parser = argparse.ArgumentParser(description='MBTA Schedule Display')
+    parser.add_argument('--once', action='store_true', help='Run once and exit')
+    args = parser.parse_args()
+
+    if args.once:
+        # Run once and exit
+        asyncio.run(run_once())
+    else:
+        # Run web server as normal
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8000)
 
 # Create default config file if it doesn't exist
 if not os.path.exists(CONFIG_FILE):
