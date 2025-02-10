@@ -139,7 +139,6 @@ async def get_stop_locations(route_id: str) -> dict:
             f"{MBTA_API_BASE}/stops",
             params={
                 "filter[route]": route_id,
-                "include": "route"
             },
             headers=HEADERS
         ) as response:
@@ -149,7 +148,6 @@ async def get_stop_locations(route_id: str) -> dict:
             return {
                 stop["attributes"]["name"]: {
                     "latitude": stop["attributes"]["latitude"],
-                    "longitude": stop["attributes"]["longitude"]
                 }
                 for stop in data.get("data", [])
             }
@@ -187,12 +185,8 @@ async def update_trmnl_display(predictions: List[Prediction]):
     
     # Get stop locations and determine line direction
     stop_locations = await get_stop_locations(config.route_id)
+    sorted_stops = list(stop_predictions.values())  # Default to unsorted
     if stop_locations:
-        # Find the most northern and southern stops to determine direction
-        stops_by_lat = sorted(stop_locations.items(), key=lambda x: x[1]["latitude"])
-        north_stop = stops_by_lat[-1][0]
-        south_stop = stops_by_lat[0][0]
-        
         # Sort stops from north to south
         sorted_stops = sorted(
             stop_predictions.values(),
@@ -254,34 +248,6 @@ def get_line_color(route_id: str) -> str:
         "Blue": "#2F5DA6"
     }
     return colors.get(route_id, "#666666")  # Default gray if line not found
-
-def get_stop_order(route_id: str) -> dict:
-    """Return the order of stops for a given line."""
-    orders = {
-        "Orange": [
-            "Oak Grove", 
-            "Malden Center",
-            "Wellington",
-            "Assembly",
-            "Sullivan Square",
-            "Community College",
-            "North Station",
-            "Haymarket",
-            "State",
-            "Downtown Crossing",
-            "Chinatown",
-            "Tufts Medical Center",
-            "Back Bay",
-            "Massachusetts Avenue",
-            "Ruggles",
-            "Roxbury Crossing",
-            "Jackson Square",
-            "Stony Brook",
-            "Green Street",
-            "Forest Hills"
-        ]
-    }
-    return {stop: idx for idx, stop in enumerate(orders.get(route_id, []))}
 
 @app.get("/config", response_model=RouteConfig)
 async def get_config():
