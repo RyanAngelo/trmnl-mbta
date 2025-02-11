@@ -168,7 +168,10 @@ async def update_trmnl_display(predictions: List[Prediction]):
         if departure:
             dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
             stop_name = await get_stop_info(pred.stop_id)
+            # MBTA API: direction_id 0 = outbound, 1 = inbound
             direction = "inbound" if pred.direction_id == 1 else "outbound"
+            
+            print(f"Stop: {stop_name}, Direction ID: {pred.direction_id}, Direction: {direction}, Time: {dt.strftime('%I:%M %p')}")
             
             if stop_name not in stop_predictions:
                 stop_predictions[stop_name] = {
@@ -177,11 +180,16 @@ async def update_trmnl_display(predictions: List[Prediction]):
                     "outbound": []
                 }
             
-            if len(stop_predictions[stop_name][direction]) < 3:  # Keep only 3 predictions per direction
+            # Add prediction with timestamp for sorting
+            if len(stop_predictions[stop_name][direction]) < 3:
                 stop_predictions[stop_name][direction].append({
                     "time": dt.strftime("%I:%M %p"),
+                    "timestamp": dt.timestamp(),
                     "status": pred.status or "Scheduled"
                 })
+                
+                # Sort predictions by timestamp
+                stop_predictions[stop_name][direction].sort(key=lambda x: x["timestamp"])
     
     # Get stop locations and determine line direction
     stop_locations = await get_stop_locations(config.route_id)
@@ -204,12 +212,12 @@ async def update_trmnl_display(predictions: List[Prediction]):
     for i, stop in enumerate(sorted_stops):
         merge_vars[f"stop_{i}_name"] = stop["stop_name"]
         
-        # Add inbound times without status
-        for j, pred in enumerate(stop["inbound"][:3], 1):
+        # Add sorted inbound times
+        for j, pred in enumerate(sorted(stop["inbound"], key=lambda x: x["timestamp"])[:3], 1):
             merge_vars[f"stop_{i}_inbound_{j}"] = pred['time']
         
-        # Add outbound times without status
-        for j, pred in enumerate(stop["outbound"][:3], 1):
+        # Add sorted outbound times
+        for j, pred in enumerate(sorted(stop["outbound"], key=lambda x: x["timestamp"])[:3], 1):
             merge_vars[f"stop_{i}_outbound_{j}"] = pred['time']
     
     merge_vars["stop_count"] = len(sorted_stops)
