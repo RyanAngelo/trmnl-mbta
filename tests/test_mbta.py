@@ -3,7 +3,7 @@ from unittest.mock import patch, AsyncMock
 from mbta.main import (
     RouteConfig,
     Prediction,
-    load_config,
+    safe_load_config,
     get_line_color,
     get_stop_locations,
     get_stop_info
@@ -19,7 +19,7 @@ def test_get_line_color():
 def test_load_config(test_config_file):
     """Test loading configuration from file."""
     with patch('mbta.main.CONFIG_FILE', test_config_file):
-        config = load_config()
+        config = safe_load_config()
         assert config.route_id == "Red"
 
 @pytest.mark.asyncio

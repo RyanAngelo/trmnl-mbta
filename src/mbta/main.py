@@ -2,7 +2,8 @@ import os
 import json
 import logging
 from typing import List, Optional, Pattern
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Security, Request
+from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware import Middleware
 from pydantic import BaseModel, validator
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Get allowed origins from environment variable or use default
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",")
+
 # Configure rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
@@ -56,10 +60,12 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Constants for validation
@@ -100,6 +106,31 @@ HEADERS = {"x-api-key": MBTA_API_KEY} if MBTA_API_KEY else {}
 
 # API request timeout
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)  # 10 seconds timeout
+
+# API Security
+API_KEY = os.getenv("API_KEY")
+if not API_KEY:
+    logger.warning("API_KEY not set in environment variables. API endpoints will be unprotected!")
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    """Verify the API key."""
+    if not API_KEY:
+        return  # Skip validation if API_KEY is not set
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing API Key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    if api_key != API_KEY:
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid API Key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    return api_key
 
 def safe_save_config(config: RouteConfig):
     """Save configuration to file with proper locking."""
@@ -329,18 +360,28 @@ def get_line_color(route_id: str) -> str:
     return colors.get(route_id, "#666666")  # Default gray if line not found
 
 @app.get("/config", response_model=RouteConfig)
-async def get_config():
+@limiter.limit("60/minute")
+async def get_config(request: Request, api_key: str = Depends(verify_api_key)):
     """Get current configuration."""
     return safe_load_config()
 
 @app.post("/config")
-async def update_config(config: RouteConfig):
+@limiter.limit("10/minute")
+async def update_config(
+    config: RouteConfig,
+    request: Request,
+    api_key: str = Depends(verify_api_key)
+):
     """Update configuration."""
     safe_save_config(config)
     return {"status": "success", "route": config.route_id}
 
 @app.post("/webhook/update")
-async def update_schedule():
+@limiter.limit("30/minute")
+async def update_schedule(
+    request: Request,
+    api_key: str = Depends(verify_api_key)
+):
     """Manually trigger an update of the schedule display."""
     config = safe_load_config()
     predictions = await fetch_predictions(config.route_id)
