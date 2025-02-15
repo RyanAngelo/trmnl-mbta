@@ -94,13 +94,27 @@ pip install trmnl-mbta
 
 ## Configuration
 
-1. Create a `.env` file with your API keys:
-   ```
-   MBTA_API_KEY=your_api_key_here
-   TRMNL_WEBHOOK_URL=your_trmnl_webhook_url
+1. Create a `.env` file with your API keys and settings:
+   ```bash
+   cp .env.example .env
    ```
 
-2. Configure your desired line in `config.json`:
+2. Configure your environment variables in `.env`:
+   ```ini
+   # MBTA API key from api-v3.mbta.com
+   MBTA_API_KEY=your_mbta_api_key_here
+   
+   # TRMNL webhook URL from your TRMNL dashboard
+   TRMNL_WEBHOOK_URL=your_trmnl_webhook_url_here
+   
+   # Your application API key (generate with: openssl rand -hex 32)
+   API_KEY=your_generated_api_key_here
+   
+   # Comma-separated list of allowed origins for CORS
+   ALLOWED_ORIGINS=http://localhost:8000,https://your-domain.com
+   ```
+
+3. Configure your desired line in `config.json`:
    ```json
    {
      "route_id": "Orange"
@@ -115,6 +129,33 @@ pip install trmnl-mbta
    - Green-C
    - Green-D
    - Green-E
+
+### Security Configuration
+
+#### API Key Protection
+All API endpoints are protected by API key authentication. You must include the API key in the `X-API-Key` header for requests:
+```bash
+curl -H "X-API-Key: your_api_key_here" http://localhost:8000/config
+```
+
+#### CORS Configuration
+Cross-Origin Resource Sharing (CORS) is configured using the `ALLOWED_ORIGINS` environment variable. This should be a comma-separated list of allowed origins:
+```ini
+ALLOWED_ORIGINS=http://localhost:8000,https://your-domain.com
+```
+
+The CORS configuration:
+- Allows specified origins only
+- Allows GET and POST methods
+- Allows Content-Type, Authorization, and X-API-Key headers
+- Exposes rate limit headers
+- Caches preflight requests for 1 hour
+
+### Rate Limits
+The API endpoints have the following rate limits:
+- GET /config: 60 requests per minute
+- POST /config: 10 requests per minute
+- POST /webhook/update: 30 requests per minute
 
 ## Usage
 
