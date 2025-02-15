@@ -180,11 +180,38 @@ python run.py --once
 
 ## Development
 
+### Quick Setup
+
+The project uses `make` commands to simplify development tasks. To get started:
+
+```bash
+# Install dependencies and set up development environment
+make install
+
+# Run tests
+make test
+
+# Format code
+make format
+
+# Run linting checks
+make lint
+
+# Sync dependencies between pyproject.toml and requirements.txt
+make sync-deps
+
+# Clean up build artifacts and cache files
+make clean
+
+# See all available commands
+make help
+```
+
 ### Running Tests
 
 Run the test suite:
 ```bash
-pytest
+make test
 ```
 
 ### Code Style
@@ -193,6 +220,16 @@ This project uses:
 - Black for code formatting
 - isort for import sorting
 - flake8 for linting
+
+To check code style:
+```bash
+make lint
+```
+
+To automatically format code:
+```bash
+make format
+```
 
 ### Contributing
 
