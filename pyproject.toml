@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trmnl-mbta"
+version = "0.1.0"
+description = "MBTA Schedule Display for TRMNL"
+requires-python = ">=3.7"
+dependencies = [
+    "requests",
+    "python-dotenv",
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "aiohttp",
+    "slowapi",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+    "bandit",
+    "safety",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["mbta"]
+
+[tool.black]
+line-length = 100
+target-version = ['py37']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]  # Skip assert warnings in tests 

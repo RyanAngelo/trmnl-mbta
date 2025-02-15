@@ -1,68 +1,124 @@
 # TRMNL MBTA Schedule Display
 
-A real-time MBTA schedule display application for TRMNL eink displays. This application fetches and displays train arrival predictions for MBTA lines.
+A real-time MBTA schedule display application for TRMNL eink displays.
 
+## Security Notice
 
+This project uses environment variables for sensitive configuration. Never commit the `.env` file to version control.
 
-## Setup
-
-1. Clone this repository
-2. Install dependencies:
+1. Copy `.env.example` to `.env`:
    ```bash
-   pip install -r requirements.txt
+   cp .env.example .env
    ```
-3. Create a `.env` file with your API keys:
+
+2. Edit `.env` with your actual credentials:
    ```
    MBTA_API_KEY=your_api_key_here
    TRMNL_WEBHOOK_URL=your_trmnl_webhook_url
    ```
-4. Configure your desired line in `config.json`:
+
+
+## Requirements
+
+- Python 3.7 or higher
+- MBTA API key (get one at https://api-v3.mbta.com/)
+- TRMNL webhook URL for your display
+
+## Installation
+
+### From Source
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/yourusername/trmnl-mbta.git
+   cd trmnl-mbta
+   ```
+
+2. Install the package with development dependencies:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+### Using pip
+
+```bash
+pip install trmnl-mbta
+```
+
+## Configuration
+
+1. Create a `.env` file with your API keys:
+   ```
+   MBTA_API_KEY=your_api_key_here
+   TRMNL_WEBHOOK_URL=your_trmnl_webhook_url
+   ```
+
+2. Configure your desired line in `config.json`:
    ```json
    {
      "route_id": "Orange"
    }
    ```
 
-## Running the Application
+   Available route IDs:
+   - Red
+   - Orange
+   - Blue
+   - Green-B
+   - Green-C
+   - Green-D
+   - Green-E
 
-There are two ways to run the application:
+## Usage
 
-### As a Web Server
+### Running as a Web Server
+
+Start the web server:
 ```bash
-python main.py
-```
-This runs a FastAPI server that:
-- Provides configuration endpoints
-- Updates the display every 30 seconds
-- Allows manual updates via webhook
-
-### As a Cron Job
-```bash
-python main.py --once
-```
-This:
-- Runs a single update
-- Exits after completion
-- Perfect for cron jobs
-
-Example crontab entry (updates every 5 minutes):
-```bash
-*/5 * * * * cd /path/to/project && /usr/bin/python3 main.py --once >> /path/to/mbta_cron.log 2>&1
+python run.py
 ```
 
-## API Endpoints
+The server will start on http://localhost:8000 with the following endpoints:
+- GET /config - Get current configuration
+- POST /config - Update configuration
+- POST /webhook/update - Manually trigger an update
 
-- `GET /config`: Get current route configuration
-- `POST /config`: Update route configuration
-- `POST /webhook/update`: Manually trigger display update
+### Running Once
 
-## Supported Lines
+To run once and exit (useful for cron jobs):
+```bash
+python run.py --once
+```
 
-- Red Line
-- Orange Line
-- Blue Line
-- Green Line (B, C, D, E branches)
+## Development
+
+### Running Tests
+
+Run the test suite:
+```bash
+pytest
+```
+
+### Code Style
+
+This project uses:
+- Black for code formatting
+- isort for import sorting
+- flake8 for linting
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run the tests
+5. Submit a pull request
 
 ## License
 
-MIT License - See LICENSE file for details
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- MBTA for providing the API
+- TRMNL for the display platform

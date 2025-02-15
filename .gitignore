@@ -3,6 +3,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Security and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.cert
+*.password
+secrets/
+credentials/
+
 # C extensions
 *.so
 
