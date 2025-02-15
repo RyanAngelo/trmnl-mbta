@@ -6,17 +6,64 @@ A real-time MBTA schedule display application for TRMNL eink displays.
 
 This project uses environment variables for sensitive configuration. Never commit the `.env` file to version control.
 
-1. Copy `.env.example` to `.env`:
+## API Keys and Environment Variables
+
+### Required API Keys
+
+1. **MBTA API Key**
+   - Required for accessing MBTA schedule data
+   - Get one at https://api-v3.mbta.com/
+   - Free tier available with rate limits
+   - Sign up process:
+     1. Visit https://api-v3.mbta.com/
+     2. Click "Get Started"
+     3. Fill out the registration form
+     4. Your API key will be emailed to you
+
+2. **TRMNL Webhook URL**
+   - Required for updating your TRMNL display
+   - Get this from your TRMNL dashboard
+   - Format: `https://api.trmnl.com/...`
+
+3. **Application API Key**
+   - Used to secure the application's endpoints
+   - Generate a secure random string (recommended: 32+ characters)
+   - Example: `openssl rand -hex 32`
+
+### Setting Up Environment Variables
+
+1. Copy the example environment file:
    ```bash
    cp .env.example .env
    ```
 
 2. Edit `.env` with your actual credentials:
-   ```
-   MBTA_API_KEY=your_api_key_here
-   TRMNL_WEBHOOK_URL=your_trmnl_webhook_url
+   ```ini
+   # MBTA API key from api-v3.mbta.com
+   MBTA_API_KEY=your_mbta_api_key_here
+   
+   # TRMNL webhook URL from your TRMNL dashboard
+   TRMNL_WEBHOOK_URL=your_trmnl_webhook_url_here
+   
+   # Your application API key (generate with: openssl rand -hex 32)
+   API_KEY=your_generated_api_key_here
+   
+   # Comma-separated list of allowed origins for CORS
+   ALLOWED_ORIGINS=http://localhost:8000,https://your-domain.com
    ```
 
+3. Verify your configuration:
+   ```bash
+   python run.py --once
+   ```
+   This will attempt to fetch and display schedule data once.
+
+### API Authentication
+
+When making requests to the application's endpoints, include your API key in the header:
+```bash
+curl -H "X-API-Key: your_api_key_here" http://localhost:8000/config
+```
 
 ## Requirements
 
