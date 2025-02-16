@@ -5,7 +5,6 @@ from typing import List, Optional, Pattern
 from fastapi import FastAPI, HTTPException, Depends, Security, Request
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware import Middleware
 from pydantic import BaseModel, validator
 from dotenv import load_dotenv
 import aiohttp
@@ -13,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 import asyncio
 from contextlib import asynccontextmanager
-import argparse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -23,11 +21,8 @@ import fcntl
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('mbta.log'),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("mbta.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -40,6 +35,7 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",
 # Configure rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
+
 # Initialize FastAPI app
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,10 +46,8 @@ async def lifespan(app: FastAPI):
     # Cancel update loop on shutdown
     task.cancel()
 
-app = FastAPI(
-    title="TRMNL MBTA Schedule Display",
-    lifespan=lifespan
-)
+
+app = FastAPI(title="TRMNL MBTA Schedule Display", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -69,30 +63,35 @@ app.add_middleware(
 )
 
 # Constants for validation
-VALID_ROUTE_PATTERN: Pattern = re.compile(r'^(Red|Orange|Blue|Green-[A-E])$')
-VALID_STOP_PATTERN: Pattern = re.compile(r'^[a-zA-Z0-9-]+$')
+VALID_ROUTE_PATTERN: Pattern = re.compile(r"^(Red|Orange|Blue|Green-[A-E])$")
+VALID_STOP_PATTERN: Pattern = re.compile(r"^[a-zA-Z0-9-]+$")
+
 
 # Configuration model
 class RouteConfig(BaseModel):
     """Configuration model for a single route"""
+
     route_id: str
 
-    @validator('route_id')
+    @validator("route_id")
     def validate_route_id(cls, v):
         """Validate route_id format"""
         if not VALID_ROUTE_PATTERN.match(v):
-            raise ValueError('Invalid route_id format')
+            raise ValueError("Invalid route_id format")
         return v
+
 
 # Schedule prediction model
 class Prediction(BaseModel):
     """Schedule prediction model"""
+
     route_id: str
     stop_id: str
     arrival_time: Optional[str]
     departure_time: Optional[str]
     direction_id: int
     status: Optional[str]
+
 
 # Global configuration
 TEMPLATE_PATH = Path(__file__).parent.parent.parent / "templates" / "trmnl-template.html"
@@ -114,6 +113,7 @@ if not API_KEY:
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+
 async def verify_api_key(api_key: str = Security(api_key_header)):
     """Verify the API key."""
     if not API_KEY:
@@ -132,11 +132,12 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
         )
     return api_key
 
+
 def safe_save_config(config: RouteConfig):
     """Save configuration to file with proper locking."""
     try:
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-        with open(CONFIG_FILE, 'w') as f:
+        with open(CONFIG_FILE, "w") as f:
             # Get an exclusive lock
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
@@ -148,6 +149,7 @@ def safe_save_config(config: RouteConfig):
         logger.error(f"Error saving config: {str(e)}")
         raise HTTPException(status_code=500, detail="Could not save configuration")
 
+
 def safe_load_config() -> RouteConfig:
     """Load configuration from file with proper error handling."""
     try:
@@ -156,7 +158,7 @@ def safe_load_config() -> RouteConfig:
             safe_save_config(default_config)
             return default_config
 
-        with open(CONFIG_FILE, 'r') as f:
+        with open(CONFIG_FILE, "r") as f:
             # Get a shared lock for reading
             fcntl.flock(f.fileno(), fcntl.LOCK_SH)
             try:
@@ -169,56 +171,52 @@ def safe_load_config() -> RouteConfig:
         logger.error(f"Error loading config: {str(e)}")
         raise HTTPException(status_code=500, detail="Could not load configuration")
 
+
 async def get_stop_info(stop_id: str) -> str:
     """Fetch stop name from MBTA API."""
     if not VALID_STOP_PATTERN.match(stop_id):
         logger.warning(f"Invalid stop_id format: {stop_id}")
         return "Invalid Stop"
-    
+
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
-        async with session.get(
-            f"{MBTA_API_BASE}/stops/{stop_id}",
-            headers=HEADERS
-        ) as response:
+        async with session.get(f"{MBTA_API_BASE}/stops/{stop_id}", headers=HEADERS) as response:
             if response.status != 200:
                 return stop_id
             data = await response.json()
             return data.get("data", {}).get("attributes", {}).get("name", stop_id)
 
+
 async def get_route_stops(route_id: str) -> List[str]:
     """Fetch all stops for a given route from MBTA API."""
     async with aiohttp.ClientSession() as session:
         async with session.get(
-            f"{MBTA_API_BASE}/stops",
-            params={"filter[route]": route_id},
-            headers=HEADERS
+            f"{MBTA_API_BASE}/stops", params={"filter[route]": route_id}, headers=HEADERS
         ) as response:
             if response.status != 200:
                 raise HTTPException(status_code=response.status, detail="MBTA API error")
             data = await response.json()
             return [stop["id"] for stop in data.get("data", [])]
 
+
 async def fetch_predictions(route_id: str) -> List[Prediction]:
     """Fetch predictions from MBTA API."""
     stops = await get_route_stops(route_id)
-    
+
     params = {
         "filter[route]": route_id,
         "filter[stop]": ",".join(stops),
         "sort": "departure_time",
-        "include": "route,stop"
+        "include": "route,stop",
     }
-    
+
     async with aiohttp.ClientSession() as session:
         async with session.get(
-            f"{MBTA_API_BASE}/predictions",
-            params=params,
-            headers=HEADERS
+            f"{MBTA_API_BASE}/predictions", params=params, headers=HEADERS
         ) as response:
             if response.status != 200:
                 raise HTTPException(status_code=response.status, detail="MBTA API error")
             data = await response.json()
-            
+
             predictions = []
             for pred in data.get("data", []):
                 attributes = pred.get("attributes", {})
@@ -229,10 +227,11 @@ async def fetch_predictions(route_id: str) -> List[Prediction]:
                         arrival_time=attributes.get("arrival_time"),
                         departure_time=attributes.get("departure_time"),
                         direction_id=attributes.get("direction_id", 0),
-                        status=attributes.get("status")
+                        status=attributes.get("status"),
                     )
                 )
             return predictions
+
 
 async def get_stop_locations(route_id: str) -> dict:
     """Fetch all stops with their locations for a given route."""
@@ -242,7 +241,7 @@ async def get_stop_locations(route_id: str) -> dict:
             params={
                 "filter[route]": route_id,
             },
-            headers=HEADERS
+            headers=HEADERS,
         ) as response:
             if response.status != 200:
                 return {}
@@ -254,15 +253,16 @@ async def get_stop_locations(route_id: str) -> dict:
                 for stop in data.get("data", [])
             }
 
+
 async def update_trmnl_display(predictions: List[Prediction]):
     """Send updates to TRMNL display via webhook."""
     if not TRMNL_WEBHOOK_URL:
         logger.error("Error: TRMNL webhook URL not configured")
         raise HTTPException(status_code=500, detail="TRMNL webhook URL not configured")
-    
+
     config = safe_load_config()
     logger.info(f"Current route config: {config.route_id}")
-    
+
     # Get predictions for each stop and direction
     stop_predictions = {}
     for pred in predictions:
@@ -272,27 +272,30 @@ async def update_trmnl_display(predictions: List[Prediction]):
             stop_name = await get_stop_info(pred.stop_id)
             # MBTA API: direction_id 0 = outbound, 1 = inbound
             direction = "inbound" if pred.direction_id == 1 else "outbound"
-            
-            logger.info(f"Stop: {stop_name}, Direction ID: {pred.direction_id}, Direction: {direction}, Time: {dt.strftime('%I:%M %p')}")
-            
+
+            logger.info(
+                f"Stop: {stop_name}, Direction ID: {pred.direction_id}, Direction: {direction}, Time: {dt.strftime('%I:%M %p')}"
+            )
+
             if stop_name not in stop_predictions:
                 stop_predictions[stop_name] = {
                     "stop_name": stop_name,
                     "inbound": [],
-                    "outbound": []
+                    "outbound": [],
                 }
-            
+
             # Add prediction with timestamp for sorting
             if len(stop_predictions[stop_name][direction]) < 3:
-                stop_predictions[stop_name][direction].append({
+                prediction_data = {
                     "time": dt.strftime("%I:%M %p"),
                     "timestamp": dt.timestamp(),
-                    "status": pred.status or "Scheduled"
-                })
-                
+                    "status": pred.status or "Scheduled",
+                }
+                stop_predictions[stop_name][direction].append(prediction_data)
+
                 # Sort predictions by timestamp
                 stop_predictions[stop_name][direction].sort(key=lambda x: x["timestamp"])
-    
+
     # Get stop locations and determine line direction
     stop_locations = await get_stop_locations(config.route_id)
     sorted_stops = list(stop_predictions.values())  # Default to unsorted
@@ -300,51 +303,48 @@ async def update_trmnl_display(predictions: List[Prediction]):
         # Sort stops from north to south
         sorted_stops = sorted(
             stop_predictions.values(),
-            key=lambda x: -stop_locations.get(x["stop_name"], {"latitude": 0})["latitude"]
+            key=lambda x: -stop_locations.get(x["stop_name"], {"latitude": 0})["latitude"],
         )
-    
+
     # Create numbered variables for each stop
     merge_vars = {
         "line_name": config.route_id,
         "line_color": get_line_color(config.route_id),
-        "last_updated": datetime.now().strftime("%I:%M %p")
+        "last_updated": datetime.now().strftime("%I:%M %p"),
     }
-    
+
     # Add numbered stop variables with inbound/outbound times
     for i, stop in enumerate(sorted_stops):
         merge_vars[f"stop_{i}_name"] = stop["stop_name"]
-        
+
         # Add sorted inbound times
         for j, pred in enumerate(sorted(stop["inbound"], key=lambda x: x["timestamp"])[:3], 1):
-            merge_vars[f"stop_{i}_inbound_{j}"] = pred['time']
-        
+            merge_vars[f"stop_{i}_inbound_{j}"] = pred["time"]
+
         # Add sorted outbound times
         for j, pred in enumerate(sorted(stop["outbound"], key=lambda x: x["timestamp"])[:3], 1):
-            merge_vars[f"stop_{i}_outbound_{j}"] = pred['time']
-    
+            merge_vars[f"stop_{i}_outbound_{j}"] = pred["time"]
+
     merge_vars["stop_count"] = len(sorted_stops)
 
-    template_data = {
-        "merge_variables": merge_vars
-    }
-    
+    template_data = {"merge_variables": merge_vars}
+
     logger.info(f"Sending update to TRMNL: {template_data}")
-    
+
     async with aiohttp.ClientSession() as session:
         try:
             response = await session.post(
-                TRMNL_WEBHOOK_URL,
-                json=template_data,
-                headers={"Content-Type": "application/json"}
+                TRMNL_WEBHOOK_URL, json=template_data, headers={"Content-Type": "application/json"}
             )
             logger.info(f"TRMNL response status: {response.status}")
             response_text = await response.text()
             logger.info(f"TRMNL response body: {response_text}")
-            
+
             if response.status != 200:
                 logger.error(f"TRMNL error response: {response_text}")
         except Exception as e:
             logger.error(f"Error sending to TRMNL: {str(e)}")
+
 
 def get_line_color(route_id: str) -> str:
     """Return the color code for a given MBTA line."""
@@ -355,9 +355,10 @@ def get_line_color(route_id: str) -> str:
         "Green-C": "#00843D",
         "Green-D": "#00843D",
         "Green-E": "#00843D",
-        "Blue": "#2F5DA6"
+        "Blue": "#2F5DA6",
     }
     return colors.get(route_id, "#666666")  # Default gray if line not found
+
 
 @app.get("/config", response_model=RouteConfig)
 @limiter.limit("60/minute")
@@ -365,28 +366,26 @@ async def get_config(request: Request, api_key: str = Depends(verify_api_key)):
     """Get current configuration."""
     return safe_load_config()
 
+
 @app.post("/config")
 @limiter.limit("10/minute")
 async def update_config(
-    config: RouteConfig,
-    request: Request,
-    api_key: str = Depends(verify_api_key)
+    config: RouteConfig, request: Request, api_key: str = Depends(verify_api_key)
 ):
     """Update configuration."""
     safe_save_config(config)
     return {"status": "success", "route": config.route_id}
 
+
 @app.post("/webhook/update")
 @limiter.limit("30/minute")
-async def update_schedule(
-    request: Request,
-    api_key: str = Depends(verify_api_key)
-):
+async def update_schedule(request: Request, api_key: str = Depends(verify_api_key)):
     """Manually trigger an update of the schedule display."""
     config = safe_load_config()
     predictions = await fetch_predictions(config.route_id)
     await update_trmnl_display(predictions)
     return {"status": "success", "predictions_count": len(predictions)}
+
 
 async def update_loop():
     """Main loop to update the display periodically"""
@@ -402,6 +401,7 @@ async def update_loop():
             print(f"Error in update loop: {str(e)}")
             await asyncio.sleep(5)
 
+
 async def run_once():
     """Run a single update and exit."""
     try:
@@ -416,6 +416,7 @@ async def run_once():
         print(f"Error in update: {str(e)}")
         raise e
 
+
 # Create default config file if it doesn't exist
 if not os.path.exists(CONFIG_FILE):
-    safe_save_config(RouteConfig(route_id="Red")) 
+    safe_save_config(RouteConfig(route_id="Red"))
