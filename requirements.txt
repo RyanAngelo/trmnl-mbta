@@ -1,4 +1,4 @@
-aiohttp==3.9.3
+aiohttp==3.11.0b0
 fastapi==0.109.2
 pydantic==2.6.1
 python-dotenv==1.0.0
