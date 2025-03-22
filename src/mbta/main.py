@@ -291,15 +291,19 @@ async def update_trmnl_display(
     - nX: Stop name (e.g., "n0" = "Assembly")
     - iX1: First inbound prediction time (e.g., "i01" = "2:15p")
     - iX2: Second inbound prediction time (e.g., "i02" = "2:30p")
+    - iX3: Third inbound prediction time (e.g., "i03" = "2:45p")
     - oX1: First outbound prediction time (e.g., "o01" = "2:20p")
     - oX2: Second outbound prediction time (e.g., "o02" = "2:35p")
+    - oX3: Third outbound prediction time (e.g., "o03" = "2:50p")
 
     Example for Assembly station (index 0):
     - n0: "Assembly"
     - i01: "2:15p" (first inbound train)
     - i02: "2:30p" (second inbound train)
+    - i03: "2:45p" (third inbound train)
     - o01: "2:20p" (first outbound train)
     - o02: "2:35p" (second outbound train)
+    - o03: "2:50p" (third outbound train)
     """
     # Initialize base variables for the template
     merge_vars = {
@@ -325,12 +329,12 @@ async def update_trmnl_display(
             # i for inbound (direction_id = 0), o for outbound (direction_id = 1)
             direction = "i" if direction_id == "0" else "o"
 
-            # Add up to 2 predictions per direction
-            # Format: [i|o]X[1|2] where:
+            # Add up to 3 predictions per direction
+            # Format: [i|o]X[1|2|3] where:
             # - i/o is the direction
             # - X is the stop index (0-11)
-            # - 1/2 is the prediction number
-            for i, time in enumerate(times[:2], 1):
+            # - 1/2/3 is the prediction number
+            for i, time in enumerate(times[:3], 1):
                 merge_vars[f"{direction}{stop_idx}{i}"] = convert_to_short_time(time)
 
     # Implement exponential backoff for rate limiting
@@ -475,7 +479,7 @@ async def process_predictions(
         # Sort and limit predictions for each direction
         for direction in ["0", "1"]:
             times[direction].sort()
-            stop_predictions[stop_id][direction] = times[direction][:2]
+            stop_predictions[stop_id][direction] = times[direction][:3]
     return stop_predictions, stop_names
 
 

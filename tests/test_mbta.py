@@ -109,8 +109,10 @@ async def test_update_trmnl_display_success(mock_logger, mock_webhook_url):
             assert f"n{i}" not in merge_vars
             assert f"i{i}1" not in merge_vars
             assert f"i{i}2" not in merge_vars
+            assert f"i{i}3" not in merge_vars
             assert f"o{i}1" not in merge_vars
             assert f"o{i}2" not in merge_vars
+            assert f"o{i}3" not in merge_vars
         # Verify logging
         mock_logger["info"].assert_has_calls(
             [

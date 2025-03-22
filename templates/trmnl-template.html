@@ -10,15 +10,19 @@ Stop Variables (where X is the stop index from 0-11):
 - {{nX}}: Stop name (e.g., "n0" = "Assembly")
 - {{iX1}}: First inbound prediction time (e.g., "i01" = "2:15p")
 - {{iX2}}: Second inbound prediction time (e.g., "i02" = "2:30p")
+- {{iX3}}: Third inbound prediction time (e.g., "i03" = "2:45p")
 - {{oX1}}: First outbound prediction time (e.g., "o01" = "2:20p")
 - {{oX2}}: Second outbound prediction time (e.g., "o02" = "2:35p")
+- {{oX3}}: Third outbound prediction time (e.g., "o03" = "2:50p")
 
 Example for Assembly station (index 0):
 - {{n0}}: "Assembly"
 - {{i01}}: "2:15p" (first inbound train)
 - {{i02}}: "2:30p" (second inbound train)
+- {{i03}}: "2:45p" (third inbound train)
 - {{o01}}: "2:20p" (first outbound train)
 - {{o02}}: "2:35p" (second outbound train)
+- {{o03}}: "2:50p" (third outbound train)
 -->
 <div style="font-family: system-ui; margin: 10px; background: #ffffff; color: #333333;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -37,6 +41,8 @@ Example for Assembly station (index 0):
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Outbound</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Inbound</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Outbound</th>
+            <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Inbound</th>
+            <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Outbound</th>
         </tr>
         <tr>
             <th style="text-align: left; padding: 4px 8px; color: #666; font-size: 0.9em;"></th>
@@ -44,6 +50,8 @@ Example for Assembly station (index 0):
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Arriving</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Following</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Following</th>
+            <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Next</th>
+            <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Next</th>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n0}}</td>
@@ -51,6 +59,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o01}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i02}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o02}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i03}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o03}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n1}}</td>
@@ -58,6 +68,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o11}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i12}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o12}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i13}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o13}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n2}}</td>
@@ -65,6 +77,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o21}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i22}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o22}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i23}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o23}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n3}}</td>
@@ -72,6 +86,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o31}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i32}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o32}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i33}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o33}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n4}}</td>
@@ -79,6 +95,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o41}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i42}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o42}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i43}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o43}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n5}}</td>
@@ -86,6 +104,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o51}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i52}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o52}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i53}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o53}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n6}}</td>
@@ -93,6 +113,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o61}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i62}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o62}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i63}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o63}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n7}}</td>
@@ -100,6 +122,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o71}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i72}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o72}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i73}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o73}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n8}}</td>
@@ -107,6 +131,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o81}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i82}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o82}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i83}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o83}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n9}}</td>
@@ -114,6 +140,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o91}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i92}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o92}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i93}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o93}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n10}}</td>
@@ -121,6 +149,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o101}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i102}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o102}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i103}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o103}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
             <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n11}}</td>
@@ -128,6 +158,8 @@ Example for Assembly station (index 0):
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o111}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i112}}</td>
             <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o112}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i113}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o113}}</td>
         </tr>
     </table>
 </div>
