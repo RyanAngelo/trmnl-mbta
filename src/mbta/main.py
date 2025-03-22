@@ -1,22 +1,25 @@
-import os
+# Standard library imports
+import asyncio
+import fcntl
 import json
 import logging
-from typing import List, Optional, Pattern
-from fastapi import FastAPI, HTTPException, Depends, Security, Request
-from fastapi.security import APIKeyHeader
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, validator
-from dotenv import load_dotenv
-import aiohttp
+import os
+import re
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-import asyncio
-from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional, Pattern, Tuple
+
+# Third-party imports
+import aiohttp
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
+from pydantic import BaseModel, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import re
-import fcntl
+from slowapi.util import get_remote_address
 
 # Configure logging
 logging.basicConfig(
@@ -35,8 +38,9 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",
 # Configure rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-
 # Initialize FastAPI app
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for FastAPI app"""
@@ -66,14 +70,16 @@ app.add_middleware(
 VALID_ROUTE_PATTERN: Pattern = re.compile(r"^(Red|Orange|Blue|Green-[A-E])$")
 VALID_STOP_PATTERN: Pattern = re.compile(r"^[a-zA-Z0-9-]+$")
 
-
 # Configuration model
+
+
 class RouteConfig(BaseModel):
     """Configuration model for a single route"""
 
     route_id: str
 
-    @validator("route_id")
+    @field_validator("route_id")
+    @classmethod
     def validate_route_id(cls, v):
         """Validate route_id format"""
         if not VALID_ROUTE_PATTERN.match(v):
@@ -82,6 +88,8 @@ class RouteConfig(BaseModel):
 
 
 # Schedule prediction model
+
+
 class Prediction(BaseModel):
     """Schedule prediction model"""
 
@@ -172,18 +180,27 @@ def safe_load_config() -> RouteConfig:
         raise HTTPException(status_code=500, detail="Could not load configuration")
 
 
-async def get_stop_info(stop_id: str) -> str:
-    """Fetch stop name from MBTA API."""
-    if not VALID_STOP_PATTERN.match(stop_id):
-        logger.warning(f"Invalid stop_id format: {stop_id}")
-        return "Invalid Stop"
+_stop_info_cache = {}  # Cache for stop information
 
-    async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
-        async with session.get(f"{MBTA_API_BASE}/stops/{stop_id}", headers=HEADERS) as response:
-            if response.status != 200:
-                return stop_id
-            data = await response.json()
-            return data.get("data", {}).get("attributes", {}).get("name", stop_id)
+
+async def get_stop_info(stop_id: str) -> str:
+    """Get stop information from the MBTA API."""
+    if stop_id in _stop_info_cache:
+        return _stop_info_cache[stop_id]
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{MBTA_API_BASE}/stops/{stop_id}", headers=HEADERS) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    stop_name = data["data"]["attributes"]["name"]
+                    _stop_info_cache[stop_id] = stop_name
+                    return stop_name
+                else:
+                    logger.warning(f"Invalid stop_id format: {stop_id}")
+                    return "Unknown Stop"
+    except Exception as e:
+        logger.error(f"Error fetching stop info: {str(e)}")
+        return "Unknown Stop"
 
 
 async def get_route_stops(route_id: str) -> List[str]:
@@ -254,96 +271,136 @@ async def get_stop_locations(route_id: str) -> dict:
             }
 
 
-async def update_trmnl_display(predictions: List[Prediction]):
-    """Send updates to TRMNL display via webhook."""
-    if not TRMNL_WEBHOOK_URL:
-        logger.error("Error: TRMNL webhook URL not configured")
-        raise HTTPException(status_code=500, detail="TRMNL webhook URL not configured")
+async def update_trmnl_display(
+    line_name: str,
+    line_color: str,
+    last_updated: str,
+    stop_predictions: Dict[str, Dict[str, List[str]]],
+    stop_names: Dict[str, str],
+) -> None:
+    """Update the TRMNL display with the latest predictions.
 
-    config = safe_load_config()
-    logger.info(f"Current route config: {config.route_id}")
+    The function uses a compact variable naming scheme for the template:
 
-    # Get predictions for each stop and direction
-    stop_predictions = {}
-    for pred in predictions:
-        departure = pred.departure_time or pred.arrival_time
-        if departure:
-            dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
-            stop_name = await get_stop_info(pred.stop_id)
-            # MBTA API: direction_id 0 = outbound, 1 = inbound
-            direction = "inbound" if pred.direction_id == 1 else "outbound"
+    Header Variables:
+    - l: Line name (e.g., "Red", "Orange", "Blue")
+    - c: Line color in hex format (e.g., "#FA2D27" for Red Line)
+    - u: Last updated time in short format (e.g., "2:15p")
 
-            logger.info(
-                f"Stop: {stop_name}, Direction ID: {pred.direction_id}, Direction: {direction}, Time: {dt.strftime('%I:%M %p')}"
-            )
+    Stop Variables (where X is the stop index from 0-11):
+    - nX: Stop name (e.g., "n0" = "Assembly")
+    - iX1: First inbound prediction time (e.g., "i01" = "2:15p")
+    - iX2: Second inbound prediction time (e.g., "i02" = "2:30p")
+    - oX1: First outbound prediction time (e.g., "o01" = "2:20p")
+    - oX2: Second outbound prediction time (e.g., "o02" = "2:35p")
 
-            if stop_name not in stop_predictions:
-                stop_predictions[stop_name] = {
-                    "stop_name": stop_name,
-                    "inbound": [],
-                    "outbound": [],
-                }
-
-            # Add prediction with timestamp for sorting
-            if len(stop_predictions[stop_name][direction]) < 3:
-                prediction_data = {
-                    "time": dt.strftime("%I:%M %p"),
-                    "timestamp": dt.timestamp(),
-                    "status": pred.status or "Scheduled",
-                }
-                stop_predictions[stop_name][direction].append(prediction_data)
-
-                # Sort predictions by timestamp
-                stop_predictions[stop_name][direction].sort(key=lambda x: x["timestamp"])
-
-    # Get stop locations and determine line direction
-    stop_locations = await get_stop_locations(config.route_id)
-    sorted_stops = list(stop_predictions.values())  # Default to unsorted
-    if stop_locations:
-        # Sort stops from north to south
-        sorted_stops = sorted(
-            stop_predictions.values(),
-            key=lambda x: -stop_locations.get(x["stop_name"], {"latitude": 0})["latitude"],
-        )
-
-    # Create numbered variables for each stop
+    Example for Assembly station (index 0):
+    - n0: "Assembly"
+    - i01: "2:15p" (first inbound train)
+    - i02: "2:30p" (second inbound train)
+    - o01: "2:20p" (first outbound train)
+    - o02: "2:35p" (second outbound train)
+    """
+    # Initialize base variables for the template
     merge_vars = {
-        "line_name": config.route_id,
-        "line_color": get_line_color(config.route_id),
-        "last_updated": datetime.now().strftime("%I:%M %p"),
+        "l": line_name,  # Line name (e.g., "Orange")
+        "c": line_color,  # Line color (e.g., "#FFA500")
+        "u": convert_to_short_time(last_updated),  # Last updated time (e.g., "2:15p")
     }
 
-    # Add numbered stop variables with inbound/outbound times
-    for i, stop in enumerate(sorted_stops):
-        merge_vars[f"stop_{i}_name"] = stop["stop_name"]
+    # Sort stops by name to ensure consistent ordering
+    sorted_stops = sorted(
+        [(stop_id, name) for stop_id, name in stop_names.items()], key=lambda x: x[1]
+    )
 
-        # Add sorted inbound times
-        for j, pred in enumerate(sorted(stop["inbound"], key=lambda x: x["timestamp"])[:3], 1):
-            merge_vars[f"stop_{i}_inbound_{j}"] = pred["time"]
+    # Limit to 12 stops to match template
+    for stop_idx, (stop_id, stop_name) in enumerate(sorted_stops[:12]):
+        predictions = stop_predictions.get(stop_id, {"0": [], "1": []})
 
-        # Add sorted outbound times
-        for j, pred in enumerate(sorted(stop["outbound"], key=lambda x: x["timestamp"])[:3], 1):
-            merge_vars[f"stop_{i}_outbound_{j}"] = pred["time"]
+        # Add stop name: nX where X is the stop index (0-11)
+        merge_vars[f"n{stop_idx}"] = stop_name
 
-    merge_vars["stop_count"] = len(sorted_stops)
+        # Add predictions for each direction
+        for direction_id, times in predictions.items():
+            # i for inbound (direction_id = 0), o for outbound (direction_id = 1)
+            direction = "i" if direction_id == "0" else "o"
 
-    template_data = {"merge_variables": merge_vars}
+            # Add up to 2 predictions per direction
+            # Format: [i|o]X[1|2] where:
+            # - i/o is the direction
+            # - X is the stop index (0-11)
+            # - 1/2 is the prediction number
+            for i, time in enumerate(times[:2], 1):
+                merge_vars[f"{direction}{stop_idx}{i}"] = convert_to_short_time(time)
 
-    logger.info(f"Sending update to TRMNL: {template_data}")
+    # Implement exponential backoff for rate limiting
+    base_delay = 1  # Start with 1 second delay
+    max_delay = 900  # Maximum delay of 15 minutes (900 seconds)
+    max_attempts = 5  # Maximum number of retry attempts
+    attempt = 0
 
-    async with aiohttp.ClientSession() as session:
-        try:
-            response = await session.post(
-                TRMNL_WEBHOOK_URL, json=template_data, headers={"Content-Type": "application/json"}
-            )
-            logger.info(f"TRMNL response status: {response.status}")
-            response_text = await response.text()
-            logger.info(f"TRMNL response body: {response_text}")
+    while attempt < max_attempts:  # Limit retries to max_attempts
+        async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
+            try:
+                logger.info("Sending update to TRMNL: {'merge_variables': %s}", merge_vars)
+                response = await session.post(
+                    TRMNL_WEBHOOK_URL,
+                    headers={"Content-Type": "application/json"},
+                    json={"merge_variables": merge_vars},
+                )
 
-            if response.status != 200:
-                logger.error(f"TRMNL error response: {response_text}")
-        except Exception as e:
-            logger.error(f"Error sending to TRMNL: {str(e)}")
+                response_text = await response.text()
+                logger.info("TRMNL response status: %d", response.status)
+                logger.info("TRMNL response body: %s", response_text)
+
+                if response.status == 200:
+                    return  # Success, exit the function
+                elif response.status == 429:  # Too Many Requests
+                    # Get retry delay from header or calculate exponential backoff
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            delay = int(retry_after)
+                        except ValueError:
+                            delay = min(base_delay * (2**attempt), max_delay)
+                    else:
+                        delay = min(base_delay * (2**attempt), max_delay)
+
+                    if attempt < max_attempts - 1:  # Only log warning if we're going to retry
+                        logger.warning(
+                            "Rate limited by TRMNL. Retrying in %d seconds... (Attempt %d)",
+                            delay,
+                            attempt + 1,
+                        )
+                        await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "Unexpected response from TRMNL: %d - %s", response.status, response_text
+                    )
+                    if attempt < max_attempts - 1:  # Only retry if not last attempt
+                        delay = min(base_delay * (2**attempt), max_delay)
+                        await asyncio.sleep(delay)
+
+            except Exception as e:
+                logger.error("Error sending to TRMNL: %s", str(e))
+                if attempt < max_attempts - 1:  # Only retry if not last attempt
+                    delay = min(base_delay * (2**attempt), max_delay)
+                    await asyncio.sleep(delay)
+
+            attempt += 1
+
+    # If we've exhausted all retries, log a final error
+    if attempt >= max_attempts:
+        logger.error("Failed to update TRMNL display after %d attempts", max_attempts)
+
+
+def convert_to_short_time(time_str: str) -> str:
+    """Convert time from '01:29 PM' to '1:29p' format."""
+    try:
+        time_obj = datetime.strptime(time_str, "%I:%M %p")
+        return time_obj.strftime("%-I:%M") + "p"  # %-I removes leading zero, add 'p' manually
+    except ValueError:
+        return time_str  # Return original if parsing fails
 
 
 def get_line_color(route_id: str) -> str:
@@ -377,44 +434,104 @@ async def update_config(
     return {"status": "success", "route": config.route_id}
 
 
-@app.post("/webhook/update")
-@limiter.limit("30/minute")
-async def update_schedule(request: Request, api_key: str = Depends(verify_api_key)):
-    """Manually trigger an update of the schedule display."""
+async def process_predictions(
+    predictions: List[Prediction],
+) -> Tuple[Dict[str, Dict[str, List[str]]], Dict[str, str]]:
+    """Process predictions into a format suitable for display."""
+    # First, get all stop information in parallel
+    unique_stop_ids = {pred.stop_id for pred in predictions}
+    await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
+    stop_predictions = {}  # type: Dict[str, Dict[str, List[str]]]
+    stop_names = {}  # type: Dict[str, str]
+    # Group predictions by stop
+    stop_times = {}  # type: Dict[str, Dict[str, List[str]]]
+    for pred in predictions:
+        departure = pred.departure_time or pred.arrival_time
+        if departure:
+            stop_name = _stop_info_cache.get(pred.stop_id, "Unknown Stop")
+            if stop_name == "Unknown Stop":
+                continue
+            if stop_name not in stop_times:
+                stop_times[stop_name] = {"0": [], "1": []}
+            dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
+            time_str = dt.strftime("%I:%M %p")
+            direction = str(pred.direction_id)
+            stop_times[stop_name][direction].append(time_str)
+    # Process each stop's predictions
+    for stop_name, times in stop_times.items():
+        # Find the first prediction's stop_id for this stop name
+        stop_id = next(
+            (
+                pred.stop_id
+                for pred in predictions
+                if _stop_info_cache.get(pred.stop_id) == stop_name
+            ),
+            None,
+        )
+        if not stop_id:
+            continue
+        stop_names[stop_id] = stop_name
+        stop_predictions[stop_id] = {"0": [], "1": []}
+        # Sort and limit predictions for each direction
+        for direction in ["0", "1"]:
+            times[direction].sort()
+            stop_predictions[stop_id][direction] = times[direction][:2]
+    return stop_predictions, stop_names
+
+
+async def update_display(predictions: List[Prediction]) -> None:
+    """Process predictions and update the TRMNL display."""
+    if not TRMNL_WEBHOOK_URL:
+        logger.error("Error: TRMNL webhook URL not configured")
+        raise HTTPException(status_code=500, detail="TRMNL webhook URL not configured")
+
+    config = safe_load_config()
+    logger.info(f"Current route config: {config.route_id}")
+
+    stop_predictions, stop_names = await process_predictions(predictions)
+
+    await update_trmnl_display(
+        line_name=config.route_id,
+        line_color=get_line_color(config.route_id),
+        last_updated=datetime.now().strftime("%I:%M %p"),
+        stop_predictions=stop_predictions,
+        stop_names=stop_names,
+    )
+
+
+@app.post("/webhook")
+async def webhook(request: Request) -> Dict[str, Any]:
+    """Handle incoming webhooks from MBTA."""
     config = safe_load_config()
     predictions = await fetch_predictions(config.route_id)
-    await update_trmnl_display(predictions)
+    await update_display(predictions)
     return {"status": "success", "predictions_count": len(predictions)}
 
 
-async def update_loop():
-    """Main loop to update the display periodically"""
+async def update_loop() -> None:
+    """Main update loop."""
     while True:
         try:
-            print("Fetching new predictions...")
             config = safe_load_config()
             predictions = await fetch_predictions(config.route_id)
             print(f"Got {len(predictions)} predictions")
-            await update_trmnl_display(predictions)
+            await update_display(predictions)
             await asyncio.sleep(30)
         except Exception as e:
-            print(f"Error in update loop: {str(e)}")
-            await asyncio.sleep(5)
+            logger.error(f"Error in update loop: {str(e)}")
+            await asyncio.sleep(30)
 
 
-async def run_once():
-    """Run a single update and exit."""
+async def run_once() -> None:
+    """Run one update cycle."""
     try:
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"\n[{current_time}] Starting update...")
         config = safe_load_config()
         predictions = await fetch_predictions(config.route_id)
         print(f"Got {len(predictions)} predictions")
-        await update_trmnl_display(predictions)
+        await update_display(predictions)
         print("Update complete")
     except Exception as e:
-        print(f"Error in update: {str(e)}")
-        raise e
+        logger.error(f"Error running once: {str(e)}")
 
 
 # Create default config file if it doesn't exist

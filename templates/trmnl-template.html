@@ -1,18 +1,38 @@
+<!--
+Template Variables:
+
+Header Variables:
+- {{l}}: Line name (e.g., "Red", "Orange", "Blue")
+- {{c}}: Line color in hex format (e.g., "#FA2D27" for Red Line)
+- {{u}}: Last updated time in short format (e.g., "2:15p")
+
+Stop Variables (where X is the stop index from 0-11):
+- {{nX}}: Stop name (e.g., "n0" = "Assembly")
+- {{iX1}}: First inbound prediction time (e.g., "i01" = "2:15p")
+- {{iX2}}: Second inbound prediction time (e.g., "i02" = "2:30p")
+- {{oX1}}: First outbound prediction time (e.g., "o01" = "2:20p")
+- {{oX2}}: Second outbound prediction time (e.g., "o02" = "2:35p")
+
+Example for Assembly station (index 0):
+- {{n0}}: "Assembly"
+- {{i01}}: "2:15p" (first inbound train)
+- {{i02}}: "2:30p" (second inbound train)
+- {{o01}}: "2:20p" (first outbound train)
+- {{o02}}: "2:35p" (second outbound train)
+-->
 <div style="font-family: system-ui; margin: 10px; background: #ffffff; color: #333333;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <div style="font-size: 1.8em; font-weight: bold; color: {{line_color}};">
-            {{line_name}} Line Schedule
+        <div style="font-size: 1.8em; font-weight: bold; color: {{c}};">
+            {{l}} Line Schedule
         </div>
         <div style="color: #666; font-size: 0.9em;">
-            Last Updated: {{last_updated}}
+            Last Updated: {{u}}
         </div>
     </div>
 
     <table style="width: 100%; border-collapse: collapse;">
         <tr>
             <th style="text-align: left; padding: 4px 8px; color: #666; font-size: 0.9em;">Stop</th>
-            <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Inbound</th>
-            <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Outbound</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Inbound</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Outbound</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Inbound</th>
@@ -24,116 +44,90 @@
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Arriving</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Following</th>
             <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Following</th>
-            <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Later</th>
-            <th style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.9em;">Later</th>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_0_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_0_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_0_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_0_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_0_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_0_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_0_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n0}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i01}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o01}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i02}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o02}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_1_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_1_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_1_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_1_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_1_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_1_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_1_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n1}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i11}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o11}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i12}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o12}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_2_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_2_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_2_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_2_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_2_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_2_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_2_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n2}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i21}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o21}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i22}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o22}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_3_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_3_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_3_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_3_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_3_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_3_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_3_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n3}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i31}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o31}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i32}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o32}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_4_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_4_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_4_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_4_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_4_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_4_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_4_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n4}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i41}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o41}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i42}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o42}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_5_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_5_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_5_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_5_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_5_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_5_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_5_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n5}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i51}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o51}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i52}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o52}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_6_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_6_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_6_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_6_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_6_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_6_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_6_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n6}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i61}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o61}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i62}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o62}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_7_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_7_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_7_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_7_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_7_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_7_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_7_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n7}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i71}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o71}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i72}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o72}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_8_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_8_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_8_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_8_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_8_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_8_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_8_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n8}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i81}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o81}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i82}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o82}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_9_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_9_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_9_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_9_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_9_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_9_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_9_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n9}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i91}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o91}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i92}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o92}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_10_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_10_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_10_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_10_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_10_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_10_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_10_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n10}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i101}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o101}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i102}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o102}}</td>
         </tr>
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{stop_11_name}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_11_inbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_11_outbound_1}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_11_inbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_11_outbound_2}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_11_inbound_3}}</td>
-            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{stop_11_outbound_3}}</td>
+            <td style="text-align: left; padding: 4px 8px; color: #333333; font-size: 0.95em;">{{n11}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i111}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o111}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{i112}}</td>
+            <td style="text-align: center; padding: 4px 8px; color: #666; font-size: 0.95em;">{{o112}}</td>
         </tr>
     </table>
 </div>

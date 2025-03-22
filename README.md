@@ -178,55 +178,44 @@ To run once and exit (useful for cron jobs):
 python run.py --once
 ```
 
+## Display Format
+
+The application uses a TRMNL-specific template format to display MBTA schedule information. The template consists of a single root div element containing a table layout (no HTML/HEAD tags), showing up to 12 stops with their inbound and outbound predictions. The display updates every 30 seconds and includes:
+
+- Line name and color
+- Last updated time
+- For each stop:
+  - Stop name
+  - Next 2 inbound predictions
+  - Next 2 outbound predictions
+
+### Template Variables
+
+The template uses a compact variable naming scheme to minimize payload size:
+
+Header Variables:
+- `{{l}}`: Line name (e.g., "Red", "Orange", "Blue")
+- `{{c}}`: Line color in hex format (e.g., "#FA2D27" for Red Line)
+- `{{u}}`: Last updated time in short format (e.g., "2:15p")
+
+Stop Variables (where X is the stop index from 0-11):
+- `{{nX}}`: Stop name (e.g., "n0" = "Assembly")
+- `{{iX1}}`: First inbound prediction time (e.g., "i01" = "2:15p")
+- `{{iX2}}`: Second inbound prediction time (e.g., "i02" = "2:30p")
+- `{{oX1}}`: First outbound prediction time (e.g., "o01" = "2:20p")
+- `{{oX2}}`: Second outbound prediction time (e.g., "o02" = "2:35p")
+
+Example for Assembly station (index 0):
+```
+Stop Name: {{n0}} = "Assembly"
+Inbound:   {{i01}} = "2:15p", {{i02}} = "2:30p"
+Outbound:  {{o01}} = "2:20p", {{o02}} = "2:35p"
+```
+
+Note: The template must be a single root element without HTML or HEAD tags, as per TRMNL's requirements. All styling is done inline to ensure compatibility.
+
 ## Development
 
 ### Quick Setup
 
-The project uses `make` commands to simplify development tasks. To get started:
-
-```bash
-# Install dependencies and set up development environment
-make install
-
-# Run tests
-make test
-
-# Format code
-make format
-
-# Run linting checks
-make lint
-
-# Sync dependencies between pyproject.toml and requirements.txt
-make sync-deps
-
-# Clean up build artifacts and cache files
-make clean
-
-# See all available commands
-make help
-```
-
-### Running Tests
-
-Run the test suite:
-```bash
-make test
-```
-
-### Code Style
-
-This project uses:
-- Black for code formatting
-- isort for import sorting
-- flake8 for linting
-
-To check code style:
-```bash
-make lint
-```
-
-To automatically format code:
-```bash
-make format
-```
+The project uses `
