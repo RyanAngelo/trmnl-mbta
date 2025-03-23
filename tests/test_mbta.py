@@ -10,6 +10,7 @@ from mbta.main import (
     logger,
     safe_load_config,
     update_trmnl_display,
+    convert_to_short_time,
 )
 
 
@@ -269,3 +270,17 @@ async def test_update_trmnl_display_network_error(mock_logger, mock_webhook_url)
         mock_logger["error"].assert_called_with(
             "Error sending to TRMNL: %s", "Connection timed out"
         )
+
+
+def test_convert_to_short_time():
+    """Test time format conversion."""
+    # Test PM times
+    assert convert_to_short_time("01:29 PM") == "1:29p"
+    assert convert_to_short_time("11:59 PM") == "11:59p"
+    
+    # Test AM times
+    assert convert_to_short_time("01:29 AM") == "1:29a"
+    assert convert_to_short_time("11:59 AM") == "11:59a"
+    
+    # Test invalid format
+    assert convert_to_short_time("invalid") == "invalid"

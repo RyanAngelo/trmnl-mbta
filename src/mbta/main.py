@@ -399,10 +399,11 @@ async def update_trmnl_display(
 
 
 def convert_to_short_time(time_str: str) -> str:
-    """Convert time from '01:29 PM' to '1:29p' format."""
+    """Convert time from '01:29 PM' to '1:29p' format or '01:29 AM' to '1:29a' format."""
     try:
         time_obj = datetime.strptime(time_str, "%I:%M %p")
-        return time_obj.strftime("%-I:%M") + "p"  # %-I removes leading zero, add 'p' manually
+        period = "a" if time_obj.strftime("%p") == "AM" else "p"
+        return time_obj.strftime("%-I:%M") + period  # %-I removes leading zero
     except ValueError:
         return time_str  # Return original if parsing fails
 
