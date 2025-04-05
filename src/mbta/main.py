@@ -70,6 +70,71 @@ app.add_middleware(
 VALID_ROUTE_PATTERN: Pattern = re.compile(r"^(Red|Orange|Blue|Green-[A-E])$")
 VALID_STOP_PATTERN: Pattern = re.compile(r"^[a-zA-Z0-9-]+$")
 
+# Stop order for each line (inbound direction)
+STOP_ORDER = {
+    "Orange": [
+        "Oak Grove",
+        "Malden Center",
+        "Wellington",
+        "Assembly",
+        "Sullivan Square",
+        "Community College",
+        "North Station",
+        "Haymarket",
+        "State",
+        "Downtown Crossing",
+        "Chinatown",
+        "Tufts Medical Center",
+        "Back Bay",
+        "Massachusetts Avenue",
+        "Ruggles",
+        "Roxbury Crossing",
+        "Jackson Square",
+        "Stony Brook",
+        "Green Street",
+        "Forest Hills"
+    ],
+    "Red": [
+        "Alewife",
+        "Davis",
+        "Porter",
+        "Harvard",
+        "Central",
+        "Kendall/MIT",
+        "Charles/MGH",
+        "Park Street",
+        "Downtown Crossing",
+        "South Station",
+        "Broadway",
+        "Andrew",
+        "JFK/UMass",
+        "Savin Hill",
+        "Fields Corner",
+        "Shawmut",
+        "Ashmont",
+        "North Quincy",
+        "Wollaston",
+        "Quincy Center",
+        "Quincy Adams",
+        "Braintree"
+    ],
+    "Blue": [
+        "Wonderland",
+        "Revere Beach",
+        "Beachmont",
+        "Suffolk Downs",
+        "Orient Heights",
+        "Wood Island",
+        "Airport",
+        "Maverick",
+        "Bowdoin",
+        "Government Center",
+        "State",
+        "Aquarium",
+        "Maverick"
+    ]
+}
+
 # Configuration model
 
 
@@ -334,8 +399,11 @@ async def update_trmnl_display(
             # - i/o is the direction
             # - X is the stop index (0-11)
             # - 1/2/3 is the prediction number
-            for i, time in enumerate(times[:3], 1):
-                merge_vars[f"{direction}{stop_idx}{i}"] = convert_to_short_time(time)
+            for i in range(1, 4):  # Always create 3 slots for each direction
+                if i <= len(times):
+                    merge_vars[f"{direction}{stop_idx}{i}"] = convert_to_short_time(times[i-1])
+                else:
+                    merge_vars[f"{direction}{stop_idx}{i}"] = ""  # Empty string for no prediction
 
     # Implement exponential backoff for rate limiting
     base_delay = 1  # Start with 1 second delay
@@ -448,6 +516,12 @@ async def process_predictions(
     await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
     stop_predictions = {}  # type: Dict[str, Dict[str, List[str]]]
     stop_names = {}  # type: Dict[str, str]
+    
+    # Get the route ID from the first prediction
+    if not predictions:
+        return stop_predictions, stop_names
+    route_id = predictions[0].route_id
+    
     # Group predictions by stop
     stop_times = {}  # type: Dict[str, Dict[str, List[str]]]
     for pred in predictions:
@@ -462,8 +536,15 @@ async def process_predictions(
             time_str = dt.strftime("%I:%M %p")
             direction = str(pred.direction_id)
             stop_times[stop_name][direction].append(time_str)
-    # Process each stop's predictions
-    for stop_name, times in stop_times.items():
+    
+    # Get the ordered stops for this route
+    ordered_stops = STOP_ORDER.get(route_id, [])
+    
+    # Process each stop's predictions in the correct order
+    for stop_name in ordered_stops:
+        if stop_name not in stop_times:
+            continue
+            
         # Find the first prediction's stop_id for this stop name
         stop_id = next(
             (
@@ -475,12 +556,16 @@ async def process_predictions(
         )
         if not stop_id:
             continue
+            
         stop_names[stop_id] = stop_name
         stop_predictions[stop_id] = {"0": [], "1": []}
+        
         # Sort and limit predictions for each direction
         for direction in ["0", "1"]:
-            times[direction].sort()
-            stop_predictions[stop_id][direction] = times[direction][:3]
+            times = stop_times[stop_name][direction]
+            times.sort()
+            stop_predictions[stop_id][direction] = times[:3]
+            
     return stop_predictions, stop_names
 
 
