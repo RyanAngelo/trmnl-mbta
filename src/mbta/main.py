@@ -38,6 +38,9 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",
 # Configure rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
+# Debug mode flag
+DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
+
 # Initialize FastAPI app
 
 
@@ -377,33 +380,42 @@ async def update_trmnl_display(
         "u": convert_to_short_time(last_updated),  # Last updated time (e.g., "2:15p")
     }
 
-    # Sort stops by name to ensure consistent ordering
-    sorted_stops = sorted(
-        [(stop_id, name) for stop_id, name in stop_names.items()], key=lambda x: x[1]
-    )
+    # Get the ordered stops for this route
+    ordered_stops = STOP_ORDER.get(line_name, [])
+    
+    # Create a mapping of stop names to their IDs
+    name_to_id = {name: stop_id for stop_id, name in stop_names.items()}
+    
+    # Process stops in the correct order
+    for stop_idx, stop_name in enumerate(ordered_stops[:12]):  # Limit to 12 stops
+        if stop_name in name_to_id:
+            stop_id = name_to_id[stop_name]
+            predictions = stop_predictions.get(stop_id, {"0": [], "1": []})
 
-    # Limit to 12 stops to match template
-    for stop_idx, (stop_id, stop_name) in enumerate(sorted_stops[:12]):
-        predictions = stop_predictions.get(stop_id, {"0": [], "1": []})
+            # Add stop name: nX where X is the stop index (0-11)
+            merge_vars[f"n{stop_idx}"] = stop_name
 
-        # Add stop name: nX where X is the stop index (0-11)
-        merge_vars[f"n{stop_idx}"] = stop_name
+            # Add predictions for each direction
+            for direction_id, times in predictions.items():
+                # i for inbound (direction_id = 0), o for outbound (direction_id = 1)
+                direction = "i" if direction_id == "0" else "o"
 
-        # Add predictions for each direction
-        for direction_id, times in predictions.items():
-            # i for inbound (direction_id = 0), o for outbound (direction_id = 1)
-            direction = "i" if direction_id == "0" else "o"
+                # Add up to 3 predictions per direction
+                # Format: [i|o]X[1|2|3] where:
+                # - i/o is the direction
+                # - X is the stop index (0-11)
+                # - 1/2/3 is the prediction number
+                for i in range(1, 4):  # Always create 3 slots for each direction
+                    if i <= len(times):
+                        merge_vars[f"{direction}{stop_idx}{i}"] = convert_to_short_time(times[i-1])
+                    else:
+                        merge_vars[f"{direction}{stop_idx}{i}"] = ""  # Empty string for no prediction
 
-            # Add up to 3 predictions per direction
-            # Format: [i|o]X[1|2|3] where:
-            # - i/o is the direction
-            # - X is the stop index (0-11)
-            # - 1/2/3 is the prediction number
-            for i in range(1, 4):  # Always create 3 slots for each direction
-                if i <= len(times):
-                    merge_vars[f"{direction}{stop_idx}{i}"] = convert_to_short_time(times[i-1])
-                else:
-                    merge_vars[f"{direction}{stop_idx}{i}"] = ""  # Empty string for no prediction
+    # If in debug mode, output to log instead of sending to TRMNL
+    if DEBUG_MODE:
+        debug_output = format_debug_output(merge_vars, line_name)
+        logger.info("Debug output:\n%s", debug_output)
+        return
 
     # Implement exponential backoff for rate limiting
     base_delay = 1  # Start with 1 second delay
@@ -464,6 +476,38 @@ async def update_trmnl_display(
     # If we've exhausted all retries, log a final error
     if attempt >= max_attempts:
         logger.error("Failed to update TRMNL display after %d attempts", max_attempts)
+
+
+def format_debug_output(merge_vars: Dict[str, str], line_name: str) -> str:
+    """Format debug output in a readable way for console or file."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    output = [
+        f"=== {line_name} Line Predictions ({now}) ===",
+        f"Last Updated: {merge_vars.get('u', 'N/A')}",
+        "",
+        "Stop Name          | Inbound 1 | Outbound 1 | Inbound 2 | Outbound 2 | Inbound 3 | Outbound 3",
+        "------------------|-----------|------------|-----------|------------|-----------|------------"
+    ]
+    
+    # Process each stop
+    for i in range(12):
+        stop_name = merge_vars.get(f"n{i}", "")
+        if not stop_name:
+            continue
+            
+        # Get predictions for this stop
+        inbound1 = merge_vars.get(f"i{i}1", "")
+        outbound1 = merge_vars.get(f"o{i}1", "")
+        inbound2 = merge_vars.get(f"i{i}2", "")
+        outbound2 = merge_vars.get(f"o{i}2", "")
+        inbound3 = merge_vars.get(f"i{i}3", "")
+        outbound3 = merge_vars.get(f"o{i}3", "")
+        
+        # Format the line
+        line = f"{stop_name:<18} | {inbound1:>9} | {outbound1:>10} | {inbound2:>9} | {outbound2:>10} | {inbound3:>9} | {outbound3:>10}"
+        output.append(line)
+    
+    return "\n".join(output)
 
 
 def convert_to_short_time(time_str: str) -> str:
@@ -545,7 +589,7 @@ async def process_predictions(
         unique_stop_ids = {pred.stop_id for pred in predictions}
         await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
     
-    # Group predictions by stop
+    # Group predictions by stop and direction
     stop_times = {}  # type: Dict[str, Dict[str, List[str]]]
     for pred in predictions:
         departure = pred.departure_time or pred.arrival_time
@@ -590,9 +634,10 @@ async def process_predictions(
         
         # If we have predictions for this stop, add them
         if stop_name in stop_times:
+            # Sort times for each direction
             for direction in ["0", "1"]:
-                times = stop_times[stop_name][direction]
-                times.sort()
+                times = sorted(stop_times[stop_name][direction])
+                # Take up to 3 predictions for each direction
                 stop_predictions[stop_id][direction] = times[:3]
     
     return stop_predictions, stop_names

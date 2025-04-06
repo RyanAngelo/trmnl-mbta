@@ -50,6 +50,13 @@ This project uses environment variables for sensitive configuration. Never commi
    
    # Comma-separated list of allowed origins for CORS
    ALLOWED_ORIGINS=http://localhost:8000,https://your-domain.com
+   
+   # Debug mode settings
+   # Set to true to enable debug mode (outputs to console or file instead of sending to TRMNL)
+   DEBUG_MODE=false
+   
+   # Path to debug output file (leave empty to output to console)
+   DEBUG_OUTPUT_FILE=debug_output.txt
    ```
 
 3. Verify your configuration:
@@ -112,6 +119,13 @@ pip install trmnl-mbta
    
    # Comma-separated list of allowed origins for CORS
    ALLOWED_ORIGINS=http://localhost:8000,https://your-domain.com
+   
+   # Debug mode settings
+   # Set to true to enable debug mode (outputs to console or file instead of sending to TRMNL)
+   DEBUG_MODE=false
+   
+   # Path to debug output file (leave empty to output to console)
+   DEBUG_OUTPUT_FILE=debug_output.txt
    ```
 
 3. Configure your desired line in `config.json`:
@@ -176,6 +190,32 @@ The server will start on http://localhost:8000 with the following endpoints:
 To run once and exit (useful for cron jobs):
 ```bash
 python run.py --once
+```
+
+### Debug Mode
+
+For development and troubleshooting without a TRMNL display, you can enable debug mode:
+
+1. Set `DEBUG_MODE=true` in your `.env` file
+2. Run the application as usual
+
+Debug mode will:
+- Skip sending updates to TRMNL
+- Output a formatted table of predictions to the log file
+- Show all stops with their inbound and outbound predictions
+- Include timestamps for when the data was fetched
+
+Example debug output in the log file:
+```
+2024-04-06 14:30:45,123 - src.mbta.main - INFO - Debug output:
+=== Orange Line Predictions (2024-04-06 14:30:45) ===
+Last Updated: 2:30p
+
+Stop Name          | Inbound 1 | Outbound 1 | Inbound 2 | Outbound 2 | Inbound 3 | Outbound 3
+------------------|-----------|------------|-----------|------------|-----------|------------
+Oak Grove         |     2:35p |      2:40p |     2:50p |      2:55p |     3:05p |      3:10p
+Malden Center     |     2:37p |      2:38p |     2:52p |      2:53p |     3:07p |      3:08p
+Wellington        |     2:40p |      2:35p |     2:55p |      2:50p |     3:10p |      3:05p
 ```
 
 ## Display Format
