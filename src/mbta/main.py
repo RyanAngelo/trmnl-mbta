@@ -676,14 +676,10 @@ async def update_loop() -> None:
     """Main update loop."""
     while True:
         try:
-            config = safe_load_config()
-            predictions = await fetch_predictions(config.route_id)
-            print(f"Got {len(predictions)} predictions")
-            await update_display(predictions)
-            await asyncio.sleep(30)
+            await run_once()
         except Exception as e:
             logger.error(f"Error in update loop: {str(e)}")
-            await asyncio.sleep(30)
+        await asyncio.sleep(30)  # Update every 30 seconds
 
 
 async def run_once() -> None:
