@@ -196,16 +196,20 @@ python run.py --once
 
 For development and troubleshooting without a TRMNL display, you can enable debug mode:
 
-1. Set `DEBUG_MODE=true` in your `.env` file
-2. Run the application as usual
+1. Set `DEBUG_MODE=true` in your `.env` file, or
+2. Set it temporarily via environment variable:
+   ```bash
+   DEBUG_MODE=true python run.py --once
+   ```
 
 Debug mode will:
 - Skip sending updates to TRMNL
-- Output a formatted table of predictions to the log file
+- Output a formatted table of predictions to the console or log file
 - Show all stops with their inbound and outbound predictions
 - Include timestamps for when the data was fetched
+- Display up to 3 predictions per direction for each stop
 
-Example debug output in the log file:
+Example debug output:
 ```
 2024-04-06 14:30:45,123 - src.mbta.main - INFO - Debug output:
 === Orange Line Predictions (2024-04-06 14:30:45) ===
@@ -217,6 +221,8 @@ Oak Grove         |     2:35p |      2:40p |     2:50p |      2:55p |     3:05p 
 Malden Center     |     2:37p |      2:38p |     2:52p |      2:53p |     3:07p |      3:08p
 Wellington        |     2:40p |      2:35p |     2:55p |      2:50p |     3:10p |      3:05p
 ```
+
+The `--once` flag is particularly useful with debug mode as it will run once and exit, making it easier to see the output without the continuous update loop.
 
 ## Display Format
 
