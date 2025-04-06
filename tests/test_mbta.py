@@ -11,6 +11,8 @@ from mbta.main import (
     safe_load_config,
     update_trmnl_display,
     convert_to_short_time,
+    get_scheduled_times,
+    process_predictions,
 )
 
 
@@ -284,3 +286,123 @@ def test_convert_to_short_time():
     
     # Test invalid format
     assert convert_to_short_time("invalid") == "invalid"
+
+
+@pytest.mark.asyncio
+async def test_get_scheduled_times(mock_logger):
+    """Test fetching scheduled times from MBTA API."""
+    # Create mock response with scheduled times
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "attributes": {
+                    "departure_time": "2024-04-06T06:00:00-04:00",
+                    "direction_id": 0
+                },
+                "relationships": {
+                    "stop": {"data": {"id": "stop1"}}
+                }
+            },
+            {
+                "attributes": {
+                    "departure_time": "2024-04-06T06:15:00-04:00",
+                    "direction_id": 1
+                },
+                "relationships": {
+                    "stop": {"data": {"id": "stop2"}}
+                }
+            }
+        ]
+    }
+    
+    with patch("aiohttp.ClientSession.get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+        
+        result = await get_scheduled_times("Orange")
+        assert len(result) == 2
+        assert result[0]["attributes"]["departure_time"] == "2024-04-06T06:00:00-04:00"
+        assert result[1]["attributes"]["departure_time"] == "2024-04-06T06:15:00-04:00"
+
+
+@pytest.mark.asyncio
+async def test_get_scheduled_times_error(mock_logger):
+    """Test handling of API errors when fetching scheduled times."""
+    # Create mock response with error
+    mock_response = AsyncMock()
+    mock_response.status = 500
+    
+    with patch("aiohttp.ClientSession.get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+        
+        result = await get_scheduled_times("Orange")
+        assert result == []
+        mock_logger["warning"].assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_process_predictions_with_scheduled_times(mock_logger):
+    """Test processing predictions with scheduled times when no real-time predictions exist."""
+    # Mock the get_scheduled_times function to return some scheduled times
+    mock_scheduled_times = [
+        {
+            "attributes": {
+                "departure_time": "2024-04-06T06:00:00-04:00",
+                "direction_id": 0
+            },
+            "relationships": {
+                "stop": {"data": {"id": "stop1"}}
+            }
+        },
+        {
+            "attributes": {
+                "departure_time": "2024-04-06T06:15:00-04:00",
+                "direction_id": 1
+            },
+            "relationships": {
+                "stop": {"data": {"id": "stop2"}}
+            }
+        }
+    ]
+    
+    with patch("mbta.main.get_scheduled_times", return_value=mock_scheduled_times), \
+         patch("mbta.main.get_stop_info") as mock_get_stop_info:
+        # Set up stop info cache
+        mock_get_stop_info.side_effect = lambda stop_id: {
+            "stop1": "Oak Grove",
+            "stop2": "Malden Center"
+        }.get(stop_id, "Unknown Stop")
+        
+        # Process empty predictions list
+        stop_predictions, stop_names = await process_predictions([])
+        
+        # Verify that scheduled times were processed
+        assert len(stop_predictions) > 0
+        assert len(stop_names) > 0
+        
+        # Verify that Oak Grove is first
+        first_stop_id = next(iter(stop_names))
+        assert stop_names[first_stop_id] == "Oak Grove"
+        
+        # Verify that scheduled times are included
+        for stop_id, predictions in stop_predictions.items():
+            assert "0" in predictions  # inbound direction
+            assert "1" in predictions  # outbound direction
+
+
+@pytest.mark.asyncio
+async def test_process_predictions_with_no_times(mock_logger):
+    """Test processing predictions when there are no real-time or scheduled times."""
+    with patch("mbta.main.get_scheduled_times", return_value=[]):
+        stop_predictions, stop_names = await process_predictions([])
+        
+        # Verify that we still get the stop names in the correct order
+        assert len(stop_names) > 0
+        first_stop_id = next(iter(stop_names))
+        assert stop_names[first_stop_id] == "Oak Grove"
+        
+        # Verify that all prediction slots are empty
+        for stop_id, predictions in stop_predictions.items():
+            assert predictions["0"] == []  # inbound direction
+            assert predictions["1"] == []  # outbound direction

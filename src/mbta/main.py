@@ -507,20 +507,43 @@ async def update_config(
     return {"status": "success", "route": config.route_id}
 
 
+async def get_scheduled_times(route_id: str) -> List[Dict[str, Any]]:
+    """Fetch scheduled service times from MBTA API."""
+    params = {
+        "filter[route]": route_id,
+        "filter[date]": datetime.now().strftime("%Y-%m-%d"),
+        "sort": "departure_time",
+        "include": "route,stop",
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{MBTA_API_BASE}/schedules", params=params, headers=HEADERS
+        ) as response:
+            if response.status != 200:
+                logger.warning(f"Failed to fetch scheduled times: {response.status}")
+                return []
+            data = await response.json()
+            return data.get("data", [])
+
+
 async def process_predictions(
     predictions: List[Prediction],
 ) -> Tuple[Dict[str, Dict[str, List[str]]], Dict[str, str]]:
     """Process predictions into a format suitable for display."""
-    # First, get all stop information in parallel
-    unique_stop_ids = {pred.stop_id for pred in predictions}
-    await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
     stop_predictions = {}  # type: Dict[str, Dict[str, List[str]]]
     stop_names = {}  # type: Dict[str, str]
     
-    # Get the route ID from the first prediction
-    if not predictions:
-        return stop_predictions, stop_names
-    route_id = predictions[0].route_id
+    # Get the route ID from the first prediction or use default
+    route_id = predictions[0].route_id if predictions else "Orange"  # Default to Orange if no predictions
+    
+    # Get the ordered stops for this route
+    ordered_stops = STOP_ORDER.get(route_id, [])
+    
+    # First, get all stop information in parallel if we have predictions
+    if predictions:
+        unique_stop_ids = {pred.stop_id for pred in predictions}
+        await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
     
     # Group predictions by stop
     stop_times = {}  # type: Dict[str, Dict[str, List[str]]]
@@ -537,35 +560,41 @@ async def process_predictions(
             direction = str(pred.direction_id)
             stop_times[stop_name][direction].append(time_str)
     
-    # Get the ordered stops for this route
-    ordered_stops = STOP_ORDER.get(route_id, [])
+    # If no real-time predictions, try to get scheduled times
+    if not predictions:
+        logger.info("No real-time predictions available, fetching scheduled times")
+        scheduled_times = await get_scheduled_times(route_id)
+        
+        # Process scheduled times
+        for schedule in scheduled_times:
+            attributes = schedule.get("attributes", {})
+            departure = attributes.get("departure_time")
+            if departure:
+                stop_id = schedule["relationships"]["stop"]["data"]["id"]
+                stop_name = _stop_info_cache.get(stop_id, "Unknown Stop")
+                if stop_name == "Unknown Stop":
+                    continue
+                if stop_name not in stop_times:
+                    stop_times[stop_name] = {"0": [], "1": []}
+                dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
+                time_str = dt.strftime("%I:%M %p")
+                direction = str(attributes.get("direction_id", 0))
+                stop_times[stop_name][direction].append(time_str)
     
-    # Process each stop's predictions in the correct order
-    for stop_name in ordered_stops:
-        if stop_name not in stop_times:
-            continue
-            
-        # Find the first prediction's stop_id for this stop name
-        stop_id = next(
-            (
-                pred.stop_id
-                for pred in predictions
-                if _stop_info_cache.get(pred.stop_id) == stop_name
-            ),
-            None,
-        )
-        if not stop_id:
-            continue
-            
+    # Process each stop in the correct order, even if there are no predictions
+    for stop_idx, stop_name in enumerate(ordered_stops[:12]):  # Limit to 12 stops
+        # Generate a unique stop ID for this stop
+        stop_id = f"stop_{stop_idx}"
         stop_names[stop_id] = stop_name
         stop_predictions[stop_id] = {"0": [], "1": []}
         
-        # Sort and limit predictions for each direction
-        for direction in ["0", "1"]:
-            times = stop_times[stop_name][direction]
-            times.sort()
-            stop_predictions[stop_id][direction] = times[:3]
-            
+        # If we have predictions for this stop, add them
+        if stop_name in stop_times:
+            for direction in ["0", "1"]:
+                times = stop_times[stop_name][direction]
+                times.sort()
+                stop_predictions[stop_id][direction] = times[:3]
+    
     return stop_predictions, stop_names
 
 
