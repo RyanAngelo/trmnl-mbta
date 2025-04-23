@@ -489,19 +489,28 @@ def format_debug_output(merge_vars: Dict[str, str], line_name: str) -> str:
         "------------------|-----------|------------|-----------|------------|-----------|------------"
     ]
     
-    # Process each stop
-    for i in range(12):
-        stop_name = merge_vars.get(f"n{i}", "")
-        if not stop_name:
+    # Get the ordered stops for this line
+    ordered_stops = STOP_ORDER.get(line_name, [])
+    
+    # Process each stop in the correct order
+    for stop_name in ordered_stops[:12]:  # Limit to 12 stops
+        # Find the index of this stop in the merge_vars
+        stop_idx = None
+        for i in range(12):
+            if merge_vars.get(f"n{i}", "") == stop_name:
+                stop_idx = i
+                break
+        
+        if stop_idx is None:
             continue
             
         # Get predictions for this stop
-        inbound1 = merge_vars.get(f"i{i}1", "")
-        outbound1 = merge_vars.get(f"o{i}1", "")
-        inbound2 = merge_vars.get(f"i{i}2", "")
-        outbound2 = merge_vars.get(f"o{i}2", "")
-        inbound3 = merge_vars.get(f"i{i}3", "")
-        outbound3 = merge_vars.get(f"o{i}3", "")
+        inbound1 = merge_vars.get(f"i{stop_idx}1", "")
+        outbound1 = merge_vars.get(f"o{stop_idx}1", "")
+        inbound2 = merge_vars.get(f"i{stop_idx}2", "")
+        outbound2 = merge_vars.get(f"o{stop_idx}2", "")
+        inbound3 = merge_vars.get(f"i{stop_idx}3", "")
+        outbound3 = merge_vars.get(f"o{stop_idx}3", "")
         
         # Format the line
         line = f"{stop_name:<18} | {inbound1:>9} | {outbound1:>10} | {inbound2:>9} | {outbound2:>10} | {inbound3:>9} | {outbound3:>10}"
