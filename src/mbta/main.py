@@ -21,6 +21,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from mbta.api import get_scheduled_times
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -557,27 +559,7 @@ async def update_config(
 ):
     """Update configuration."""
     safe_save_config(config)
-    return {"status": "success", "route": config.route_id}
-
-
-async def get_scheduled_times(route_id: str) -> List[Dict[str, Any]]:
-    """Fetch scheduled service times from MBTA API."""
-    params = {
-        "filter[route]": route_id,
-        "filter[date]": datetime.now().strftime("%Y-%m-%d"),
-        "sort": "departure_time",
-        "include": "route,stop",
-    }
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{MBTA_API_BASE}/schedules", params=params, headers=HEADERS
-        ) as response:
-            if response.status != 200:
-                logger.warning(f"Failed to fetch scheduled times: {response.status}")
-                return []
-            data = await response.json()
-            return data.get("data", [])
+    return {"status": "success"}
 
 
 async def process_predictions(

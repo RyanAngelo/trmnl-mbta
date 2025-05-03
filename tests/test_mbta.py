@@ -11,9 +11,9 @@ from mbta.main import (
     safe_load_config,
     update_trmnl_display,
     convert_to_short_time,
-    get_scheduled_times,
     process_predictions,
 )
+from mbta.api import get_scheduled_times
 
 
 @pytest.fixture
@@ -333,8 +333,10 @@ async def test_get_scheduled_times_error(mock_logger):
     mock_response = AsyncMock()
     mock_response.status = 500
     
-    with patch("aiohttp.ClientSession.get") as mock_get:
+    with patch("aiohttp.ClientSession.get") as mock_get, \
+         patch("mbta.api.logger") as mock_api_logger:
         mock_get.return_value.__aenter__.return_value = mock_response
+        mock_api_logger.warning = mock_logger["warning"]
         
         result = await get_scheduled_times("Orange")
         assert result == []
@@ -366,7 +368,7 @@ async def test_process_predictions_with_scheduled_times(mock_logger):
         }
     ]
     
-    with patch("mbta.main.get_scheduled_times", return_value=mock_scheduled_times), \
+    with patch("mbta.api.get_scheduled_times", return_value=mock_scheduled_times), \
          patch("mbta.main.get_stop_info") as mock_get_stop_info:
         # Set up stop info cache
         mock_get_stop_info.side_effect = lambda stop_id: {
@@ -394,7 +396,7 @@ async def test_process_predictions_with_scheduled_times(mock_logger):
 @pytest.mark.asyncio
 async def test_process_predictions_with_no_times(mock_logger):
     """Test processing predictions when there are no real-time or scheduled times."""
-    with patch("mbta.main.get_scheduled_times", return_value=[]):
+    with patch("mbta.api.get_scheduled_times", return_value=[]):
         stop_predictions, stop_names = await process_predictions([])
         
         # Verify that we still get the stop names in the correct order

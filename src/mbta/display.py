@@ -2,11 +2,16 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Tuple
 import aiohttp
+import asyncio
 
-from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE
+from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER
 from src.mbta.models import Prediction
+from src.mbta.api import get_stop_info, get_scheduled_times
 
 logger = logging.getLogger(__name__)
+
+# Cache for stop information
+_stop_info_cache = {}
 
 def convert_to_short_time(time_str: str) -> str:
     """Convert ISO time string to short format (e.g., '2:15p')."""
@@ -132,22 +137,63 @@ async def process_predictions(
     stop_predictions: Dict[str, Dict[str, List[str]]] = {}
     stop_names: Dict[str, str] = {}
 
-    for prediction in predictions:
-        stop_id = prediction.stop_id
-        if stop_id not in stop_predictions:
-            stop_predictions[stop_id] = {"inbound": [], "outbound": []}
+    # Get the route ID from the first prediction or use default
+    route_id = predictions[0].route_id if predictions else "Orange"  # Default to Orange if no predictions
 
-        # Get the time (prefer arrival time, fall back to departure time)
-        time = prediction.arrival_time or prediction.departure_time
-        if not time:
-            continue
+    # First, get all stop information in parallel if we have predictions
+    if predictions:
+        unique_stop_ids = {pred.stop_id for pred in predictions}
+        await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
 
-        # Convert to display format
-        display_time = convert_to_short_time(time)
+    # Group predictions by stop and direction
+    stop_times = {}  # type: Dict[str, Dict[str, List[str]]]
+    for pred in predictions:
+        departure = pred.departure_time or pred.arrival_time
+        if departure:
+            stop_name = _stop_info_cache.get(pred.stop_id, "Unknown Stop")
+            if stop_name == "Unknown Stop":
+                continue
+            if stop_name not in stop_times:
+                stop_times[stop_name] = {"0": [], "1": []}
+            dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
+            time_str = dt.strftime("%I:%M %p")
+            direction = str(pred.direction_id)
+            stop_times[stop_name][direction].append(time_str)
 
-        # Add to appropriate direction list
-        direction = "inbound" if prediction.direction_id == 1 else "outbound"
-        if len(stop_predictions[stop_id][direction]) < 3:  # Keep only 3 predictions per direction
-            stop_predictions[stop_id][direction].append(display_time)
+    # If no real-time predictions, try to get scheduled times
+    if not predictions:
+        logger.info("No real-time predictions available, fetching scheduled times")
+        scheduled_times = await get_scheduled_times(route_id)
+        
+        # Process scheduled times
+        for schedule in scheduled_times:
+            attributes = schedule.get("attributes", {})
+            departure = attributes.get("departure_time")
+            if departure:
+                stop_id = schedule["relationships"]["stop"]["data"]["id"]
+                stop_name = _stop_info_cache.get(stop_id, "Unknown Stop")
+                if stop_name == "Unknown Stop":
+                    continue
+                if stop_name not in stop_times:
+                    stop_times[stop_name] = {"0": [], "1": []}
+                dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
+                time_str = dt.strftime("%I:%M %p")
+                direction = str(attributes.get("direction_id", 0))
+                stop_times[stop_name][direction].append(time_str)
+
+    # Process each stop in the correct order, even if there are no predictions
+    for stop_idx, stop_name in enumerate(STOP_ORDER.get(route_id, [])[:12]):  # Limit to 12 stops
+        # Generate a unique stop ID for this stop
+        stop_id = f"stop_{stop_idx}"
+        stop_names[stop_id] = stop_name
+        stop_predictions[stop_id] = {"0": [], "1": []}
+        
+        # If we have predictions for this stop, add them
+        if stop_name in stop_times:
+            # Sort times for each direction
+            for direction in ["0", "1"]:
+                times = sorted(stop_times[stop_name][direction])
+                # Take up to 3 predictions for each direction
+                stop_predictions[stop_id][direction] = times[:3]
 
     return stop_predictions, stop_names 

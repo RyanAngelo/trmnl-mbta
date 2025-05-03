@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import List, Dict, Any
 import aiohttp
 
@@ -33,6 +34,25 @@ async def get_route_stops(route_id: str) -> List[str]:
         ) as response:
             data = await response.json()
             return [stop["id"] for stop in data["data"]]
+
+async def get_scheduled_times(route_id: str) -> List[Dict[str, Any]]:
+    """Fetch scheduled service times from MBTA API."""
+    params = {
+        "filter[route]": route_id,
+        "filter[date]": datetime.now().strftime("%Y-%m-%d"),
+        "sort": "departure_time",
+        "include": "route,stop",
+    }
+
+    async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
+        async with session.get(
+            f"{MBTA_API_BASE}/schedules", params=params, headers=HEADERS
+        ) as response:
+            if response.status != 200:
+                logger.warning(f"Failed to fetch scheduled times: {response.status}")
+                return []
+            data = await response.json()
+            return data.get("data", [])
 
 async def fetch_predictions(route_id: str) -> List[Prediction]:
     """Fetch predictions for a route."""
