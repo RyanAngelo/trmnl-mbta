@@ -21,7 +21,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from mbta.api import get_scheduled_times
+from src.mbta.api import get_scheduled_times
 
 # Configure logging
 logging.basicConfig(

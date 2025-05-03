@@ -1,9 +1,16 @@
 import argparse
 import asyncio
+import sys
+from pathlib import Path
 
 import uvicorn
 
-from src.mbta.main import app, run_once
+# Add the src directory to the Python path
+src_path = str(Path(__file__).parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+from mbta.main import app, run_once
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MBTA Schedule Display")
