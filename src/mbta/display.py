@@ -4,9 +4,9 @@ from typing import Dict, List, Any, Tuple
 import aiohttp
 import asyncio
 
-from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER
+from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER, BUS_COLORS
 from src.mbta.models import Prediction
-from src.mbta.api import get_stop_info, get_scheduled_times
+from src.mbta.api import get_stop_info, get_scheduled_times, get_route_stops
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,11 @@ def get_line_color(route_id: str) -> str:
         "Green-D": "#00843D",
         "Green-E": "#00843D"
     }
+    
+    # Check if it's a bus route
+    if route_id in BUS_COLORS:
+        return BUS_COLORS[route_id]
+    
     return colors.get(route_id, "#000000")
 
 async def update_trmnl_display(
@@ -130,6 +135,23 @@ def format_debug_output(merge_vars: Dict[str, str], line_name: str) -> str:
 
     return "\n".join(output)
 
+async def get_bus_stop_order(route_id: str) -> List[str]:
+    """Get the stop order for a bus route from the MBTA API."""
+    try:
+        stops = await get_route_stops(route_id)
+        stop_names = []
+        
+        # Get stop names for all stops
+        for stop_id in stops:
+            stop_name = await get_stop_info(stop_id)
+            if stop_name and stop_name != "Unknown Stop":
+                stop_names.append(stop_name)
+        
+        return stop_names
+    except Exception as e:
+        logger.error(f"Error getting bus stop order for route {route_id}: {str(e)}")
+        return []
+
 async def process_predictions(
     predictions: List[Prediction],
 ) -> Tuple[Dict[str, Dict[str, List[str]]], Dict[str, str]]:
@@ -181,8 +203,16 @@ async def process_predictions(
                 direction = str(attributes.get("direction_id", 0))
                 stop_times[stop_name][direction].append(time_str)
 
+    # Get the ordered stops for this route
+    if route_id in STOP_ORDER:
+        # Use predefined stop order for subway lines
+        ordered_stops = STOP_ORDER[route_id]
+    else:
+        # For bus routes, get the stop order dynamically
+        ordered_stops = await get_bus_stop_order(route_id)
+
     # Process each stop in the correct order, even if there are no predictions
-    for stop_idx, stop_name in enumerate(STOP_ORDER.get(route_id, [])[:12]):  # Limit to 12 stops
+    for stop_idx, stop_name in enumerate(ordered_stops[:12]):  # Limit to 12 stops
         # Generate a unique stop ID for this stop
         stop_id = f"stop_{stop_idx}"
         stop_names[stop_id] = stop_name

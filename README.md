@@ -136,13 +136,46 @@ pip install trmnl-mbta
    ```
 
    Available route IDs:
-   - Red
-   - Orange
-   - Blue
-   - Green-B
-   - Green-C
-   - Green-D
-   - Green-E
+   - **Subway Lines:**
+     - Red
+     - Orange
+     - Blue
+     - Green-B
+     - Green-C
+     - Green-D
+     - Green-E
+   
+   - **Bus Routes:**
+     - Any numeric route (e.g., "1", "66", "501")
+     - Silver Line routes (e.g., "SL1", "SL2", "SL3", "SL4", "SL5", "SLW")
+     - Express routes (e.g., "170", "171", "325", "326")
+     - Commuter routes (e.g., "350", "351", "352", "354", "355")
+     - All other MBTA bus routes
+
+   **Note:** Bus routes are dynamically fetched from the MBTA API and will display stops in their proper sequence order. Unlike subway lines which have predefined stop orders, bus routes will show stops as they appear along the route.
+
+### Route Switching Utility
+
+The application includes a utility script to easily switch between different routes for testing:
+
+```bash
+# Switch to a subway line
+python scripts/switch_route.py Orange
+
+# Switch to a bus route
+python scripts/switch_route.py 66
+
+# Switch to Silver Line
+python scripts/switch_route.py SL1
+
+# Switch to express bus
+python scripts/switch_route.py 501
+```
+
+This script updates your `config.json` file with the specified route ID. It's useful for:
+- Testing different routes quickly
+- Switching between subway and bus routes
+- Verifying that your display works with various route types
 
 ### Security Configuration
 

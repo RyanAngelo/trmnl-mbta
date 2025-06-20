@@ -408,3 +408,79 @@ async def test_process_predictions_with_no_times(mock_logger):
         for stop_id, predictions in stop_predictions.items():
             assert predictions["0"] == []  # inbound direction
             assert predictions["1"] == []  # outbound direction
+
+
+@pytest.mark.asyncio
+async def test_bus_route_validation():
+    """Test that bus routes are properly validated."""
+    from src.mbta.constants import VALID_ROUTE_PATTERN
+    
+    # Test valid bus routes
+    assert VALID_ROUTE_PATTERN.match("1")
+    assert VALID_ROUTE_PATTERN.match("66")
+    assert VALID_ROUTE_PATTERN.match("SL1")
+    assert VALID_ROUTE_PATTERN.match("501")
+    
+    # Test valid subway routes
+    assert VALID_ROUTE_PATTERN.match("Red")
+    assert VALID_ROUTE_PATTERN.match("Orange")
+    assert VALID_ROUTE_PATTERN.match("Blue")
+    assert VALID_ROUTE_PATTERN.match("Green-B")
+    
+    # Test invalid routes
+    assert not VALID_ROUTE_PATTERN.match("Invalid")
+    assert not VALID_ROUTE_PATTERN.match("ABC")
+
+
+@pytest.mark.asyncio
+async def test_bus_route_color():
+    """Test that bus routes get proper colors."""
+    from src.mbta.display import get_line_color
+    from src.mbta.constants import BUS_COLORS
+    
+    # Test bus route colors
+    assert get_line_color("1") == BUS_COLORS["1"]
+    assert get_line_color("66") == BUS_COLORS["66"]
+    assert get_line_color("SL1") == BUS_COLORS["SL1"]
+    
+    # Test subway route colors
+    assert get_line_color("Red") == "#FA2D27"
+    assert get_line_color("Orange") == "#FD8A03"
+    assert get_line_color("Blue") == "#2F5DA6"
+
+
+@pytest.mark.asyncio
+async def test_bus_route_stops():
+    """Test fetching stops for bus routes."""
+    from src.mbta.api import get_route_stops
+    
+    mock_bus_stops_response = {
+        "data": [
+            {"id": "stop1", "attributes": {"name": "Bus Stop 1"}},
+            {"id": "stop2", "attributes": {"name": "Bus Stop 2"}},
+            {"id": "stop3", "attributes": {"name": "Bus Stop 3"}}
+        ]
+    }
+    
+    with patch("aiohttp.ClientSession.get") as mock_get:
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json.return_value = mock_bus_stops_response
+        mock_get.return_value.__aenter__.return_value = mock_response
+
+        result = await get_route_stops("66")
+        assert result == ["stop1", "stop2", "stop3"]
+
+
+@pytest.mark.asyncio
+async def test_bus_route_config():
+    """Test that bus routes can be configured."""
+    from src.mbta.models import RouteConfig
+    
+    # Test valid bus route configuration
+    config = RouteConfig(route_id="66")
+    assert config.route_id == "66"
+    
+    # Test invalid bus route configuration
+    with pytest.raises(ValueError, match="Invalid route_id format"):
+        RouteConfig(route_id="Invalid")

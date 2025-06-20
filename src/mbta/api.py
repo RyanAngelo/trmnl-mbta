@@ -29,11 +29,32 @@ async def get_route_stops(route_id: str) -> List[str]:
     """Get all stops for a route."""
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
         async with session.get(
-            f"{MBTA_API_BASE}/stops?filter[route]={route_id}",
+            f"{MBTA_API_BASE}/stops?filter[route]={route_id}&include=route",
             headers=HEADERS
         ) as response:
+            if response.status != 200:
+                logger.error(f"Error fetching route stops: {response.status}")
+                return []
+            
             data = await response.json()
-            return [stop["id"] for stop in data["data"]]
+            stops = data.get("data", [])
+            
+            # For bus routes, try to get stops in sequence order
+            if route_id not in ["Red", "Orange", "Blue", "Green-B", "Green-C", "Green-D", "Green-E"]:
+                # This is a bus route, try to get stops with sequence information
+                try:
+                    # Get stops with sequence information
+                    async with session.get(
+                        f"{MBTA_API_BASE}/stops?filter[route]={route_id}&include=route&sort=stop_sequence",
+                        headers=HEADERS
+                    ) as seq_response:
+                        if seq_response.status == 200:
+                            seq_data = await seq_response.json()
+                            stops = seq_data.get("data", [])
+                except Exception as e:
+                    logger.warning(f"Could not get sequenced stops for bus route {route_id}: {str(e)}")
+            
+            return [stop["id"] for stop in stops]
 
 async def get_scheduled_times(route_id: str) -> List[Dict[str, Any]]:
     """Fetch scheduled service times from MBTA API."""
