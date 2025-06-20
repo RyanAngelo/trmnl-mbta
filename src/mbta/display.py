@@ -4,7 +4,7 @@ from typing import Dict, List, Any, Tuple
 import aiohttp
 import asyncio
 
-from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER, BUS_COLORS
+from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER
 from src.mbta.models import Prediction
 from src.mbta.api import get_stop_info, get_scheduled_times, get_route_stops
 
@@ -21,27 +21,8 @@ def convert_to_short_time(time_str: str) -> str:
     local_time = dt.astimezone()
     return local_time.strftime("%-I:%M%p").lower().replace(":00", "")
 
-def get_line_color(route_id: str) -> str:
-    """Get the color for a line."""
-    colors = {
-        "Red": "#FA2D27",
-        "Orange": "#FD8A03",
-        "Blue": "#2F5DA6",
-        "Green-B": "#00843D",
-        "Green-C": "#00843D",
-        "Green-D": "#00843D",
-        "Green-E": "#00843D"
-    }
-    
-    # Check if it's a bus route
-    if route_id in BUS_COLORS:
-        return BUS_COLORS[route_id]
-    
-    return colors.get(route_id, "#000000")
-
 async def update_trmnl_display(
     line_name: str,
-    line_color: str,
     last_updated: str,
     stop_predictions: Dict[str, Dict[str, List[str]]],
     stop_names: Dict[str, str],
@@ -57,7 +38,6 @@ async def update_trmnl_display(
     # Replace variables in template
     merge_vars = {
         "l": line_name,  # Line name
-        "c": line_color,  # Line color
         "u": last_updated,  # Last updated time
     }
 

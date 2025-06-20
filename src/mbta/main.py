@@ -343,7 +343,6 @@ async def get_stop_locations(route_id: str) -> dict:
 
 async def update_trmnl_display(
     line_name: str,
-    line_color: str,
     last_updated: str,
     stop_predictions: Dict[str, Dict[str, List[str]]],
     stop_names: Dict[str, str],
@@ -354,7 +353,6 @@ async def update_trmnl_display(
 
     Header Variables:
     - l: Line name (e.g., "Red", "Orange", "Blue")
-    - c: Line color in hex format (e.g., "#FA2D27" for Red Line)
     - u: Last updated time in short format (e.g., "2:15p")
 
     Stop Variables (where X is the stop index from 0-11):
@@ -378,7 +376,6 @@ async def update_trmnl_display(
     # Initialize base variables for the template
     merge_vars = {
         "l": line_name,  # Line name (e.g., "Orange")
-        "c": line_color,  # Line color (e.g., "#FFA500")
         "u": convert_to_short_time(last_updated),  # Last updated time (e.g., "2:15p")
     }
 
@@ -531,20 +528,6 @@ def convert_to_short_time(time_str: str) -> str:
         return time_str  # Return original if parsing fails
 
 
-def get_line_color(route_id: str) -> str:
-    """Return the color code for a given MBTA line."""
-    colors = {
-        "Red": "#FA2D27",
-        "Orange": "#FFA500",
-        "Green-B": "#00843D",
-        "Green-C": "#00843D",
-        "Green-D": "#00843D",
-        "Green-E": "#00843D",
-        "Blue": "#2F5DA6",
-    }
-    return colors.get(route_id, "#666666")  # Default gray if line not found
-
-
 @app.get("/config", response_model=RouteConfig)
 @limiter.limit("60/minute")
 async def get_config(request: Request, api_key: str = Depends(verify_api_key)):
@@ -647,7 +630,6 @@ async def update_display(predictions: List[Prediction]) -> None:
 
     await update_trmnl_display(
         line_name=config.route_id,
-        line_color=get_line_color(config.route_id),
         last_updated=datetime.now().strftime("%I:%M %p"),
         stop_predictions=stop_predictions,
         stop_names=stop_names,
