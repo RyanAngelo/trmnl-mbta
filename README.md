@@ -259,9 +259,3 @@ Outbound:  {{o01}} = "2:20p", {{o02}} = "2:35p"
 ```
 
 Note: The template must be a single root element without HTML or HEAD tags, as per TRMNL's requirements. All styling is done inline to ensure compatibility.
-
-## Development
-
-### Quick Setup
-
-The project uses `
