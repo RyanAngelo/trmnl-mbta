@@ -22,6 +22,9 @@ CONFIG_FILE = Path(__file__).parent.parent.parent / "config.json"
 VALID_ROUTE_PATTERN: Pattern = re.compile(r"^(Red|Orange|Blue|Green-[A-E]|[0-9]+|[A-Z]+[0-9]+)$")
 VALID_STOP_PATTERN: Pattern = re.compile(r"^[a-zA-Z0-9-]+$")
 
+# Display configuration
+MAX_PREDICTIONS_PER_DIRECTION = 3  # Maximum number of predictions to show per direction per stop
+
 # Stop order for each line (inbound direction) - only for subway lines
 STOP_ORDER = {
     "Orange": [

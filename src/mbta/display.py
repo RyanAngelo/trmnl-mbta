@@ -4,7 +4,7 @@ from typing import Dict, List, Any, Tuple
 import aiohttp
 import asyncio
 
-from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER
+from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER, MAX_PREDICTIONS_PER_DIRECTION
 from src.mbta.models import Prediction
 from src.mbta.api import get_stop_info, get_scheduled_times, get_route_stops
 
@@ -57,7 +57,7 @@ async def update_trmnl_display(
     # Fill in any missing variables with empty strings
     for i in range(12):  # Maximum 12 stops
         merge_vars.setdefault(f"n{i}", "")
-        for j in range(1, 4):  # 3 predictions each direction
+        for j in range(1, MAX_PREDICTIONS_PER_DIRECTION + 1):  # 3 predictions each direction
             merge_vars.setdefault(f"i{i}{j}", "")
             merge_vars.setdefault(f"o{i}{j}", "")
 
@@ -162,7 +162,7 @@ async def process_predictions(
             # Swap direction mapping: 0 = outbound (toward Oak Grove), 1 = inbound (toward Forest Hills)
             direction = "outbound" if pred.direction_id == 0 else "inbound"
             stop_times[stop_name][direction].append(time_str)
-
+            
     # Always fetch scheduled times to fill gaps when we don't have enough real-time predictions
     logger.info("Fetching scheduled times to supplement real-time predictions")
     scheduled_times = await get_scheduled_times(route_id)
@@ -251,8 +251,12 @@ async def process_predictions(
                                     seen_times.add(time_str)
             
             scheduled_times_sorted = sorted(scheduled_times_list, key=lambda x: x[0] if x[0] else x[1])
-            if len(combined) < 3:
-                combined += [t[1] for t in scheduled_times_sorted[:3-len(combined)]]
-            stop_predictions[stop_id][direction] = combined[:3]
+            if len(combined) < MAX_PREDICTIONS_PER_DIRECTION:
+                combined += [t[1] for t in scheduled_times_sorted[:MAX_PREDICTIONS_PER_DIRECTION-len(combined)]]
+            stop_predictions[stop_id][direction] = combined[:MAX_PREDICTIONS_PER_DIRECTION]
+            
+            # Debug: Log what we have for this stop/direction
+            if stop_name == "Oak Grove":
+                logger.info(f"Oak Grove {direction}: real_times={len(real_times)}, scheduled_times={len(scheduled_times_list)}, combined={combined}")
 
     return stop_predictions, stop_names 

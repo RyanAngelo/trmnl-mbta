@@ -26,7 +26,7 @@ from src.mbta.models import RouteConfig, Prediction
 from src.mbta.constants import (
     ALLOWED_ORIGINS, DEBUG_MODE, MBTA_API_KEY, TRMNL_WEBHOOK_URL, API_KEY,
     MBTA_API_BASE, HEADERS, TEMPLATE_PATH, CONFIG_FILE, VALID_ROUTE_PATTERN,
-    VALID_STOP_PATTERN, STOP_ORDER
+    VALID_STOP_PATTERN, STOP_ORDER, MAX_PREDICTIONS_PER_DIRECTION
 )
 
 # Configure logging
@@ -375,7 +375,7 @@ async def update_trmnl_display(
                 # - i/o is the direction
                 # - X is the stop index (0-11)
                 # - 1/2/3 is the prediction number
-                for i in range(1, 4):  # Always create 3 slots for each direction
+                for i in range(1, MAX_PREDICTIONS_PER_DIRECTION + 1):  # Always create 3 slots for each direction
                     if i <= len(predictions[direction]):
                         merge_vars[f"{direction_letter}{stop_idx}{i}"] = convert_to_short_time(predictions[direction][i-1])
                     else:
@@ -560,11 +560,13 @@ async def process_predictions(
         stop_names[stop_id] = stop_name
         stop_predictions[stop_id] = {"inbound": [], "outbound": []}
         
-        if stop_name in stop_times:
-            for direction in ["inbound", "outbound"]:
-                real_times = []
-                scheduled_times_list = []
-                seen_times = set()
+        for direction in ["inbound", "outbound"]:
+            real_times = []
+            scheduled_times_list = []
+            seen_times = set()
+            
+            # First, collect real-time times (from predictions) if they exist
+            if stop_name in stop_times:
                 for time_str in stop_times[stop_name][direction][:]:
                     try:
                         # Parse the time string and create a timezone-aware datetime for comparison
@@ -590,44 +592,47 @@ async def process_predictions(
                         if time_str not in seen_times:
                             real_times.append((None, time_str))
                             seen_times.add(time_str)
-                # Sort real-time
-                real_times_sorted = sorted(real_times, key=lambda x: x[0] if x[0] else x[1])
-                combined = [t[1] for t in real_times_sorted]
-                latest_real_time = real_times_sorted[-1][0] if real_times_sorted else None
-                # Now, collect scheduled times (from scheduled_times) that are later than the latest real-time
-                for schedule in scheduled_times:
-                    attributes = schedule.get("attributes", {})
-                    departure = attributes.get("departure_time")
-                    if departure:
-                        stop_id_sched = schedule["relationships"]["stop"]["data"]["id"]
-                        stop_name_sched = _stop_info_cache.get(stop_id_sched, "Unknown Stop")
-                        if stop_name_sched == stop_name:
-                            dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
-                            time_str = dt.strftime("%I:%M %p")
-                            direction_sched = "outbound" if attributes.get("direction_id", 0) == 0 else "inbound"
-                            if direction_sched == direction and time_str not in seen_times:
-                                # Ensure both datetimes are timezone-aware for comparison
-                                if latest_real_time is None:
-                                    # If no real-time predictions, include all scheduled times
+            
+            # Sort real-time
+            real_times_sorted = sorted(real_times, key=lambda x: x[0] if x[0] else x[1])
+            combined = [t[1] for t in real_times_sorted]
+            latest_real_time = real_times_sorted[-1][0] if real_times_sorted else None
+            
+            # Now, collect scheduled times (from scheduled_times) that are later than the latest real-time
+            for schedule in scheduled_times:
+                attributes = schedule.get("attributes", {})
+                departure = attributes.get("departure_time")
+                if departure:
+                    stop_id_sched = schedule["relationships"]["stop"]["data"]["id"]
+                    stop_name_sched = _stop_info_cache.get(stop_id_sched, "Unknown Stop")
+                    if stop_name_sched == stop_name:
+                        dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
+                        time_str = dt.strftime("%I:%M %p")
+                        direction_sched = "outbound" if attributes.get("direction_id", 0) == 0 else "inbound"
+                        if direction_sched == direction and time_str not in seen_times:
+                            # Ensure both datetimes are timezone-aware for comparison
+                            if latest_real_time is None:
+                                # If no real-time predictions, include all scheduled times that are in the future
+                                current_time = datetime.now(dt.tzinfo)
+                                if dt > current_time:
                                     scheduled_times_list.append((dt, time_str))
                                     seen_times.add(time_str)
-                                elif latest_real_time.tzinfo is None:
-                                    # If latest_real_time is naive, assume it's in the same timezone as dt
-                                    latest_real_time = latest_real_time.replace(tzinfo=dt.tzinfo)
-                                    if dt > latest_real_time:
-                                        scheduled_times_list.append((dt, time_str))
-                                        seen_times.add(time_str)
-                                else:
-                                    # Both are timezone-aware, compare directly
-                                    if dt > latest_real_time:
-                                        scheduled_times_list.append((dt, time_str))
-                                        seen_times.add(time_str)
-                scheduled_times_sorted = sorted(scheduled_times_list, key=lambda x: x[0] if x[0] else x[1])
-                if len(combined) < 3:
-                    combined += [t[1] for t in scheduled_times_sorted[:3-len(combined)]]
-                stop_predictions[stop_id][direction] = combined[:3]
-        else:
-            continue
+                            elif latest_real_time.tzinfo is None:
+                                # If latest_real_time is naive, assume it's in the same timezone as dt
+                                latest_real_time = latest_real_time.replace(tzinfo=dt.tzinfo)
+                                if dt > latest_real_time:
+                                    scheduled_times_list.append((dt, time_str))
+                                    seen_times.add(time_str)
+                            else:
+                                # Both are timezone-aware, compare directly
+                                if dt > latest_real_time:
+                                    scheduled_times_list.append((dt, time_str))
+                                    seen_times.add(time_str)
+            
+            scheduled_times_sorted = sorted(scheduled_times_list, key=lambda x: x[0] if x[0] else x[1])
+            if len(combined) < MAX_PREDICTIONS_PER_DIRECTION:
+                combined += [t[1] for t in scheduled_times_sorted[:MAX_PREDICTIONS_PER_DIRECTION-len(combined)]]
+            stop_predictions[stop_id][direction] = combined[:MAX_PREDICTIONS_PER_DIRECTION]
     
     return stop_predictions, stop_names
 
