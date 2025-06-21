@@ -389,15 +389,15 @@ async def update_trmnl_display(
     for stop_idx, stop_name in enumerate(ordered_stops[:12]):  # Limit to 12 stops
         if stop_name in name_to_id:
             stop_id = name_to_id[stop_name]
-            predictions = stop_predictions.get(stop_id, {"0": [], "1": []})
+            predictions = stop_predictions.get(stop_id, {"inbound": [], "outbound": []})
 
             # Add stop name: nX where X is the stop index (0-11)
             merge_vars[f"n{stop_idx}"] = stop_name
 
             # Add predictions for each direction
-            for direction_id, times in predictions.items():
-                # i for inbound (direction_id = 0), o for outbound (direction_id = 1)
-                direction = "i" if direction_id == "0" else "o"
+            for direction in ["inbound", "outbound"]:
+                # i for inbound, o for outbound
+                direction_letter = "i" if direction == "inbound" else "o"
 
                 # Add up to 3 predictions per direction
                 # Format: [i|o]X[1|2|3] where:
@@ -405,10 +405,10 @@ async def update_trmnl_display(
                 # - X is the stop index (0-11)
                 # - 1/2/3 is the prediction number
                 for i in range(1, 4):  # Always create 3 slots for each direction
-                    if i <= len(times):
-                        merge_vars[f"{direction}{stop_idx}{i}"] = convert_to_short_time(times[i-1])
+                    if i <= len(predictions[direction]):
+                        merge_vars[f"{direction_letter}{stop_idx}{i}"] = convert_to_short_time(predictions[direction][i-1])
                     else:
-                        merge_vars[f"{direction}{stop_idx}{i}"] = ""  # Empty string for no prediction
+                        merge_vars[f"{direction_letter}{stop_idx}{i}"] = ""  # Empty string for no prediction
 
     # If in debug mode, output to log instead of sending to TRMNL
     if DEBUG_MODE:
@@ -572,10 +572,11 @@ async def process_predictions(
             if stop_name == "Unknown Stop":
                 continue
             if stop_name not in stop_times:
-                stop_times[stop_name] = {"0": [], "1": []}
+                stop_times[stop_name] = {"inbound": [], "outbound": []}
             dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
             time_str = dt.strftime("%I:%M %p")
-            direction = str(pred.direction_id)
+            # Swap direction mapping: 0 = outbound (toward Oak Grove), 1 = inbound (toward Forest Hills)
+            direction = "outbound" if pred.direction_id == 0 else "inbound"
             stop_times[stop_name][direction].append(time_str)
     
     # If no real-time predictions, try to get scheduled times
@@ -593,10 +594,11 @@ async def process_predictions(
                 if stop_name == "Unknown Stop":
                     continue
                 if stop_name not in stop_times:
-                    stop_times[stop_name] = {"0": [], "1": []}
+                    stop_times[stop_name] = {"inbound": [], "outbound": []}
                 dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
                 time_str = dt.strftime("%I:%M %p")
-                direction = str(attributes.get("direction_id", 0))
+                # Swap direction mapping: 0 = outbound (toward Oak Grove), 1 = inbound (toward Forest Hills)
+                direction = "outbound" if attributes.get("direction_id", 0) == 0 else "inbound"
                 stop_times[stop_name][direction].append(time_str)
     
     # Process each stop in the correct order, even if there are no predictions
@@ -604,12 +606,12 @@ async def process_predictions(
         # Generate a unique stop ID for this stop
         stop_id = f"stop_{stop_idx}"
         stop_names[stop_id] = stop_name
-        stop_predictions[stop_id] = {"0": [], "1": []}
+        stop_predictions[stop_id] = {"inbound": [], "outbound": []}
         
         # If we have predictions for this stop, add them
         if stop_name in stop_times:
             # Sort times for each direction
-            for direction in ["0", "1"]:
+            for direction in ["inbound", "outbound"]:
                 times = sorted(stop_times[stop_name][direction])
                 # Take up to 3 predictions for each direction
                 stop_predictions[stop_id][direction] = times[:3]
