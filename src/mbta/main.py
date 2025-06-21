@@ -16,12 +16,18 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+# Local imports
 from src.mbta.api import get_scheduled_times
+from src.mbta.models import RouteConfig, Prediction
+from src.mbta.constants import (
+    ALLOWED_ORIGINS, DEBUG_MODE, MBTA_API_KEY, TRMNL_WEBHOOK_URL, API_KEY,
+    MBTA_API_BASE, HEADERS, TEMPLATE_PATH, CONFIG_FILE, VALID_ROUTE_PATTERN,
+    VALID_STOP_PATTERN, STOP_ORDER
+)
 
 # Configure logging
 logging.basicConfig(
@@ -33,9 +39,6 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-
-# Get allowed origins from environment variable or use default
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",")
 
 # Configure rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -140,37 +143,6 @@ STOP_ORDER = {
     ]
 }
 
-# Configuration model
-
-
-class RouteConfig(BaseModel):
-    """Configuration model for a single route"""
-
-    route_id: str
-
-    @field_validator("route_id")
-    @classmethod
-    def validate_route_id(cls, v):
-        """Validate route_id format"""
-        if not VALID_ROUTE_PATTERN.match(v):
-            raise ValueError("Invalid route_id format")
-        return v
-
-
-# Schedule prediction model
-
-
-class Prediction(BaseModel):
-    """Schedule prediction model"""
-
-    route_id: str
-    stop_id: str
-    arrival_time: Optional[str]
-    departure_time: Optional[str]
-    direction_id: int
-    status: Optional[str]
-
-
 # Global configuration
 TEMPLATE_PATH = Path(__file__).parent.parent.parent / "templates" / "trmnl-template.html"
 CONFIG_FILE = Path(__file__).parent.parent.parent / "config.json"
@@ -185,7 +157,6 @@ HEADERS = {"x-api-key": MBTA_API_KEY} if MBTA_API_KEY else {}
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)  # 10 seconds timeout
 
 # API Security
-API_KEY = os.getenv("API_KEY")
 if not API_KEY:
     logger.warning("API_KEY not set in environment variables. API endpoints will be unprotected!")
 
