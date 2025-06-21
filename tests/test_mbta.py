@@ -13,6 +13,11 @@ from mbta.main import (
     process_predictions,
 )
 from mbta.api import get_scheduled_times
+from src.mbta.display import _stop_info_cache
+from src.mbta.constants import STOP_ORDER
+
+STOP_ORDER["Orange"] = ["Oak Grove", "Malden Center", "Wellington"]
+_stop_info_cache["stop_oak_grove"] = "Oak Grove"
 
 
 @pytest.fixture
@@ -254,15 +259,17 @@ async def test_process_predictions_with_scheduled_times(mock_logger):
         }
     ]
     
-    with patch("mbta.api.get_scheduled_times", return_value=mock_scheduled_times), \
-         patch("mbta.main.get_stop_info") as mock_get_stop_info:
-        # Set up stop info cache
+    with patch("src.mbta.display._stop_info_cache", {
+        "stop_oak_grove": "Oak Grove"
+    }), patch("src.mbta.display.get_scheduled_times", return_value=mock_scheduled_times), \
+         patch("src.mbta.display.get_stop_info") as mock_get_stop_info:
+        # Set up the mock to return stop names
         mock_get_stop_info.side_effect = lambda stop_id: {
-            "stop1": "Oak Grove",
-            "stop2": "Malden Center"
+            "stop_oak_grove": "Oak Grove"
         }.get(stop_id, "Unknown Stop")
+        _stop_info_cache["stop_oak_grove"] = "Oak Grove"
+        # Process the predictions
         
-        # Process empty predictions list
         stop_predictions, stop_names = await process_predictions([])
         
         # Verify that scheduled times were processed
@@ -282,7 +289,7 @@ async def test_process_predictions_with_scheduled_times(mock_logger):
 @pytest.mark.asyncio
 async def test_process_predictions_with_no_times(mock_logger):
     """Test processing predictions when there are no real-time or scheduled times."""
-    with patch("mbta.api.get_scheduled_times", return_value=[]):
+    with patch("src.mbta.display.get_scheduled_times", return_value=[]):
         stop_predictions, stop_names = await process_predictions([])
         
         # Verify that we still get the stop names in the correct order
@@ -522,3 +529,223 @@ async def test_direction_mapping_edge_cases():
         test_predictions = stop_predictions["stop_0"]
         assert "outbound" in test_predictions
         assert "inbound" in test_predictions
+
+
+@pytest.mark.asyncio
+async def test_time_sorting_chronological():
+    """Test that times are sorted chronologically, not alphabetically."""
+    from src.mbta.display import process_predictions
+    from src.mbta.models import Prediction
+    from datetime import datetime, timezone
+    
+    # Create mock predictions with times that would be sorted incorrectly alphabetically
+    # "10:30 AM" comes before "2:15 PM" alphabetically, but "2:15 PM" is earlier chronologically
+    mock_predictions = [
+        Prediction(
+            route_id="Orange",
+            stop_id="stop_oak_grove",
+            arrival_time="2024-06-21T10:30:00-04:00",  # 10:30 AM
+            departure_time="2024-06-21T10:30:00-04:00",
+            direction_id=0,  # outbound
+            status="On time"
+        ),
+        Prediction(
+            route_id="Orange",
+            stop_id="stop_oak_grove",
+            arrival_time="2024-06-21T14:15:00-04:00",  # 2:15 PM
+            departure_time="2024-06-21T14:15:00-04:00",
+            direction_id=0,  # outbound
+            status="On time"
+        ),
+        Prediction(
+            route_id="Orange",
+            stop_id="stop_oak_grove",
+            arrival_time="2024-06-21T12:00:00-04:00",  # 12:00 PM
+            departure_time="2024-06-21T12:00:00-04:00",
+            direction_id=0,  # outbound
+            status="On time"
+        ),
+    ]
+    
+    # Mock the stop info cache
+    with patch("src.mbta.display._stop_info_cache", {
+        "stop_oak_grove": "Oak Grove"
+    }):
+        # Process the predictions
+        stop_predictions, stop_names = await process_predictions(mock_predictions)
+        
+        # Verify we have the expected stops
+        assert len(stop_names) > 0
+        assert "stop_0" in stop_names
+        assert stop_names["stop_0"] == "Oak Grove"
+        
+        # Verify times are sorted chronologically (not alphabetically)
+        oak_grove_predictions = stop_predictions["stop_0"]
+        outbound_times = oak_grove_predictions["outbound"]
+        
+        # Should have 3 times
+        assert len(outbound_times) == 3
+        
+        # Times should be in chronological order: 10:30 AM, 12:00 PM, 2:15 PM
+        # Not alphabetical order: 10:30 AM, 12:00 PM, 2:15 PM (which would be wrong)
+        assert outbound_times[0] == "10:30 AM"  # Earliest
+        assert outbound_times[1] == "12:00 PM"  # Middle
+        assert outbound_times[2] == "02:15 PM"  # Latest
+
+
+@pytest.mark.asyncio
+async def test_scheduled_times_fill_gaps():
+    """Test that scheduled times are used to fill gaps when there aren't enough real-time predictions, and only if they are later than the last real-time prediction."""
+    from src.mbta.display import process_predictions
+    from src.mbta.models import Prediction
+    from datetime import datetime, timezone
+    
+    # Set STOP_ORDER and _stop_info_cache directly
+    STOP_ORDER["Orange"] = ["Oak Grove", "Malden Center", "Wellington"]
+    _stop_info_cache["stop_oak_grove"] = "Oak Grove"
+    
+    # Create mock predictions with only 2 outbound predictions for Oak Grove
+    mock_predictions = [
+        Prediction(
+            route_id="Orange",
+            stop_id="stop_oak_grove",
+            arrival_time="2024-06-21T10:30:00-04:00",
+            departure_time="2024-06-21T10:30:00-04:00",
+            direction_id=0,  # outbound
+            status="On time"
+        ),
+        Prediction(
+            route_id="Orange",
+            stop_id="stop_oak_grove",
+            arrival_time="2024-06-21T10:39:00-04:00",
+            departure_time="2024-06-21T10:39:00-04:00",
+            direction_id=0,  # outbound
+            status="On time"
+        ),
+        # Add some inbound predictions too
+        Prediction(
+            route_id="Orange",
+            stop_id="stop_oak_grove",
+            arrival_time="2024-06-21T10:15:00-04:00",
+            departure_time="2024-06-21T10:15:00-04:00",
+            direction_id=1,  # inbound
+            status="On time"
+        ),
+    ]
+    
+    # Mock scheduled times that are later than the last real-time prediction
+    mock_scheduled_times = [
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T10:00:00-04:00",
+                "direction_id": 0  # outbound
+            },
+            "relationships": {
+                "stop": {"data": {"id": "stop_oak_grove"}}
+            }
+        },
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T11:30:00-04:00",
+                "direction_id": 0  # outbound
+            },
+            "relationships": {
+                "stop": {"data": {"id": "stop_oak_grove"}}
+            }
+        },
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T10:45:00-04:00",
+                "direction_id": 1  # inbound
+            },
+            "relationships": {
+                "stop": {"data": {"id": "stop_oak_grove"}}
+            }
+        },
+    ]
+
+    with patch("src.mbta.display.get_scheduled_times", return_value=mock_scheduled_times) as mock_get_scheduled_times, \
+         patch("src.mbta.display.get_stop_info") as mock_get_stop_info, \
+         patch("src.mbta.display._stop_info_cache", {"stop_oak_grove": "Oak Grove"}):
+        mock_get_stop_info.side_effect = lambda stop_id: {"stop_oak_grove": "Oak Grove"}.get(stop_id, "Unknown Stop")
+        
+        stop_predictions, stop_names = await process_predictions(mock_predictions)
+        
+        # Verify we have the expected stops
+        assert len(stop_names) > 0
+        assert "stop_0" in stop_names
+        assert stop_names["stop_0"] == "Oak Grove"
+        
+        # Verify that scheduled times filled the gaps
+        oak_grove_predictions = stop_predictions["stop_0"]
+        
+        # Should have 3 outbound predictions (2 real-time + 1 scheduled, and scheduled is later than real-time)
+        outbound_times = oak_grove_predictions["outbound"]
+        print(f"DEBUG: outbound_times = {outbound_times}")
+        assert len(outbound_times) == 3
+        assert outbound_times[0] == "10:30 AM"  # First real-time
+        assert outbound_times[1] == "10:39 AM"  # Second real-time
+        assert outbound_times[2] == "11:30 AM"  # First scheduled, later than real-time
+        
+        # Should have 2 inbound predictions (1 real-time + 1 scheduled)
+        inbound_times = oak_grove_predictions["inbound"]
+        print(f"DEBUG: inbound_times = {inbound_times}")
+        assert len(inbound_times) == 2
+        assert inbound_times[0] == "10:15 AM"
+        assert inbound_times[1] == "10:45 AM"
+
+
+@pytest.mark.asyncio
+async def test_scheduled_times_used_when_no_predictions():
+    """Test that scheduled times are used when there are no real-time predictions for a stop."""
+    from src.mbta.display import process_predictions
+    from src.mbta.constants import STOP_ORDER
+    from src.mbta.display import _stop_info_cache
+    
+    # Setup: Orange line with one stop
+    STOP_ORDER["Orange"] = ["Oak Grove"]
+    _stop_info_cache["stop_oak_grove"] = "Oak Grove"
+    
+    # No real-time predictions
+    mock_predictions = []
+    
+    # Three scheduled times for outbound
+    mock_scheduled_times = [
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T10:00:00-04:00",
+                "direction_id": 0  # outbound
+            },
+            "relationships": {
+                "stop": {"data": {"id": "stop_oak_grove"}}
+            }
+        },
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T10:15:00-04:00",
+                "direction_id": 0  # outbound
+            },
+            "relationships": {
+                "stop": {"data": {"id": "stop_oak_grove"}}
+            }
+        },
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T10:30:00-04:00",
+                "direction_id": 0  # outbound
+            },
+            "relationships": {
+                "stop": {"data": {"id": "stop_oak_grove"}}
+            }
+        },
+    ]
+
+    with patch("src.mbta.display.get_scheduled_times", return_value=mock_scheduled_times) as mock_get_scheduled_times, \
+         patch("src.mbta.display.get_stop_info") as mock_get_stop_info, \
+         patch("src.mbta.display._stop_info_cache", {"stop_oak_grove": "Oak Grove"}):
+        mock_get_stop_info.side_effect = lambda stop_id: {"stop_oak_grove": "Oak Grove"}.get(stop_id, "Unknown Stop")
+        
+        stop_predictions, stop_names = await process_predictions(mock_predictions)
+        assert "stop_0" in stop_predictions
+        outbound_times = stop_predictions["stop_0"]["outbound"]
+        assert outbound_times == ["10:00 AM", "10:15 AM", "10:30 AM"]
