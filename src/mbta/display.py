@@ -64,6 +64,18 @@ def get_rate_limit_status() -> Dict[str, Any]:
         "last_update_time": _rate_limiter.last_update_time
     }
 
+def get_line_color(line_name: str) -> str:
+    """Get the hex color for a subway line."""
+    colors = {
+        "Red": "#FA2D27",
+        "Orange": "#FF8C00", 
+        "Blue": "#003DA5",
+        "Green": "#00843D",
+        "Silver": "#7C878E",
+        "Purple": "#800080"
+    }
+    return colors.get(line_name, "#333333")
+
 def convert_to_short_time(time_str: str) -> str:
     """Convert ISO time string to short format (e.g., '2:15p')."""
     if not time_str:
@@ -94,6 +106,7 @@ async def update_trmnl_display(
     merge_variables = {
         "l": line_name,  # Line name
         "u": last_updated,  # Last updated time
+        "c": get_line_color(line_name),  # Line color
     }
 
     # Add stop predictions
@@ -134,15 +147,35 @@ async def update_trmnl_display(
     if not TRMNL_WEBHOOK_URL:
         logger.error("TRMNL_WEBHOOK_URL not set")
         return
+    
+    # Validate webhook URL format
+    if not TRMNL_WEBHOOK_URL.startswith(('http://', 'https://')):
+        logger.error(f"Invalid TRMNL_WEBHOOK_URL format: {TRMNL_WEBHOOK_URL}")
+        return
+    
+    # Check for common TRMNL URL patterns
+    if 'trmnl.com' not in TRMNL_WEBHOOK_URL and 'trmnl' not in TRMNL_WEBHOOK_URL.lower():
+        logger.warning(f"TRMNL_WEBHOOK_URL doesn't contain 'trmnl': {TRMNL_WEBHOOK_URL}")
 
     try:
+        # Log what we're sending for debugging
+        webhook_data = {
+            "html": template,
+            "merge_variables": merge_variables
+        }
+        logger.info(f"Sending webhook to TRMNL with {len(merge_variables)} variables")
+        logger.info(f"Webhook URL: {TRMNL_WEBHOOK_URL}")
+        logger.debug(f"Webhook data: {webhook_data}")
+        
+        # Log sample variables for debugging
+        sample_vars = {k: v for k, v in merge_variables.items() if k in ['l', 'u', 'c', 'n0', 'i01', 'o01']}
+        logger.info(f"Sample variables: {sample_vars}")
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 TRMNL_WEBHOOK_URL,
-                json={
-                    "html": template,
-                    "merge_variables": merge_variables
-                }
+                json=webhook_data,
+                headers={"Content-Type": "application/json"}
             ) as response:
                 if response.status == 200:
                     logger.info("Successfully updated TRMNL display")
@@ -155,7 +188,12 @@ async def update_trmnl_display(
                     else:
                         logger.warning(f"Rate limited by TRMNL. Will retry on next update cycle.")
                 else:
-                    logger.error(f"Error updating TRMNL display: {response.status}")
+                    # Try to get response body for better error information
+                    try:
+                        response_text = await response.text()
+                        logger.error(f"Error updating TRMNL display: {response.status} - {response_text}")
+                    except:
+                        logger.error(f"Error updating TRMNL display: {response.status}")
     except Exception as e:
         logger.error(f"Error sending update to TRMNL: {str(e)}")
 
