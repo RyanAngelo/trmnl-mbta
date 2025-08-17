@@ -166,11 +166,18 @@ def format_debug_output(merge_variables: Dict[str, str], line_name: str) -> str:
     # Count active stops
     active_stops = sum(1 for i in range(12) if merge_variables.get(f"n{i}", ""))
     
+    # Get rate limiting status
+    rate_status = get_rate_limit_status()
+    rate_info = f"📊 Rate Limit: {rate_status['updates_this_hour']}/{rate_status['max_updates_per_hour']} updates this hour"
+    if not rate_status['can_update']:
+        rate_info += " (RATE LIMITED)"
+    
     output = [
         f"🚇 {line_name} Line Predictions",
         f"📅 {now}",
         f"🕐 Last Updated: {merge_variables['u']}",
         f"📍 Active Stops: {active_stops}",
+        f"{rate_info}",
         "",
         "Stop Name          | Inbound 1 | Outbound 1 | Inbound 2 | Outbound 2 | Inbound 3 | Outbound 3",
         "=" * 80
@@ -200,7 +207,6 @@ def format_debug_output(merge_variables: Dict[str, str], line_name: str) -> str:
 
     output.append("")
     output.append("💡 Times shown are next departures from each stop")
-    output.append("📊 Rate limit status: Use --once to see current status")
     
     return "\n".join(output)
 
