@@ -1,6 +1,9 @@
 <!--
 Template Variables:
 
+This template uses TRMNL's merge_variables system. Variables are sent separately from the HTML
+and merged by TRMNL's server. This allows for better performance and caching.
+
 Header Variables:
 - {{l}}: Line name (e.g., "Red", "Orange", "Blue")
 - {{c}}: Line color in hex format (e.g., "#FA2D27" for Red Line)
@@ -23,6 +26,20 @@ Example for Assembly station (index 0):
 - {{o01}}: "2:20p" (first outbound train)
 - {{o02}}: "2:35p" (second outbound train)
 - {{o03}}: "2:50p" (third outbound train)
+
+TRMNL Webhook Format:
+The application sends data to TRMNL in this format:
+{
+  "html": "template_with_variables",
+  "merge_variables": {
+    "l": "Red",
+    "u": "2:15p",
+    "n0": "Assembly",
+    "i01": "2:15p",
+    "o01": "2:20p",
+    // ... other variables
+  }
+}
 -->
 <div style="font-family: system-ui; margin: 10px; background: #ffffff; color: #333333;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">

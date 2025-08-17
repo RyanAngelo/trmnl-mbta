@@ -39,8 +39,8 @@ async def update_trmnl_display(
     with open(TEMPLATE_PATH, "r") as f:
         template = f.read()
 
-    # Replace variables in template
-    merge_vars = {
+    # Build merge_variables object for TRMNL
+    merge_variables = {
         "l": line_name,  # Line name
         "u": last_updated,  # Last updated time
     }
@@ -48,30 +48,26 @@ async def update_trmnl_display(
     # Add stop predictions
     for i, (stop_id, predictions) in enumerate(stop_predictions.items()):
         stop_name = stop_names.get(stop_id, stop_id)
-        merge_vars[f"n{i}"] = stop_name
+        merge_variables[f"n{i}"] = stop_name
 
         # Add inbound predictions
         for j, time in enumerate(predictions.get("inbound", [])):
-            merge_vars[f"i{i}{j+1}"] = time
+            merge_variables[f"i{i}{j+1}"] = time
 
         # Add outbound predictions
         for j, time in enumerate(predictions.get("outbound", [])):
-            merge_vars[f"o{i}{j+1}"] = time
+            merge_variables[f"o{i}{j+1}"] = time
 
     # Fill in any missing variables with empty strings
     for i in range(12):  # Maximum 12 stops
-        merge_vars.setdefault(f"n{i}", "")
+        merge_variables.setdefault(f"n{i}", "")
         for j in range(1, MAX_PREDICTIONS_PER_DIRECTION + 1):  # 3 predictions each direction
-            merge_vars.setdefault(f"i{i}{j}", "")
-            merge_vars.setdefault(f"o{i}{j}", "")
-
-    # Replace all variables in template
-    for var, value in merge_vars.items():
-        template = template.replace("{{" + var + "}}", value)
+            merge_variables.setdefault(f"i{i}{j}", "")
+            merge_variables.setdefault(f"o{i}{j}", "")
 
     if DEBUG_MODE:
         # In debug mode, output to console instead of sending to TRMNL
-        debug_output = format_debug_output(merge_vars, line_name)
+        debug_output = format_debug_output(merge_variables, line_name)
         logger.info(f"Debug output:\n{debug_output}")
         return
 
@@ -84,7 +80,10 @@ async def update_trmnl_display(
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 TRMNL_WEBHOOK_URL,
-                json={"html": template}
+                json={
+                    "html": template,
+                    "merge_variables": merge_variables
+                }
             ) as response:
                 if response.status == 200:
                     logger.info("Successfully updated TRMNL display")
@@ -100,29 +99,29 @@ async def update_trmnl_display(
     except Exception as e:
         logger.error(f"Error sending update to TRMNL: {str(e)}")
 
-def format_debug_output(merge_vars: Dict[str, str], line_name: str) -> str:
+def format_debug_output(merge_variables: Dict[str, str], line_name: str) -> str:
     """Format predictions for debug output."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     output = [
         f"=== {line_name} Line Predictions ({now}) ===",
-        f"Last Updated: {merge_vars['u']}\n",
+        f"Last Updated: {merge_variables['u']}\n",
         "Stop Name          | Inbound 1 | Outbound 1 | Inbound 2 | Outbound 2 | Inbound 3 | Outbound 3"
         "-" * 80
     ]
 
     for i in range(12):
-        stop_name = merge_vars.get(f"n{i}", "")
+        stop_name = merge_variables.get(f"n{i}", "")
         if not stop_name:
             continue
 
         row = [
             f"{stop_name:<16}",
-            f"{merge_vars.get(f'i{i}1', ''):<10}",
-            f"{merge_vars.get(f'o{i}1', ''):<11}",
-            f"{merge_vars.get(f'i{i}2', ''):<10}",
-            f"{merge_vars.get(f'o{i}2', ''):<11}",
-            f"{merge_vars.get(f'i{i}3', ''):<10}",
-            f"{merge_vars.get(f'o{i}3', ''):<10}"
+            f"{merge_variables.get(f'i{i}1', ''):<10}",
+            f"{merge_variables.get(f'o{i}1', ''):<11}",
+            f"{merge_variables.get(f'i{i}2', ''):<10}",
+            f"{merge_variables.get(f'o{i}2', ''):<11}",
+            f"{merge_variables.get(f'i{i}3', ''):<10}",
+            f"{merge_variables.get(f'o{i}3', ''):<10}"
         ]
         output.append(" | ".join(row))
 
@@ -209,6 +208,9 @@ async def process_predictions(
             scheduled_times_list = []
             seen_times = set()
             
+            # Get current time for filtering
+            current_time = datetime.now().astimezone()
+            
             # First, collect real-time times (from predictions) if they exist
             if stop_name in stop_times:
                 for time_str in stop_times[stop_name][direction][:]:
@@ -229,6 +231,11 @@ async def process_predictions(
                                     day=scheduled_dt.day,
                                     tzinfo=scheduled_dt.tzinfo
                                 )
+                        
+                        # Filter out past times
+                        if time_obj and time_obj <= current_time:
+                            continue  # Skip past times
+                            
                         if time_str not in seen_times:
                             real_times.append((time_obj, time_str))
                             seen_times.add(time_str)
@@ -249,33 +256,40 @@ async def process_predictions(
             combined = [t[1] for t in real_times_sorted]
             latest_real_time = real_times_sorted[-1][0] if real_times_sorted and real_times_sorted[-1][0] is not None else None
             
-            # Now, collect scheduled times (from scheduled_times) that are later than the latest real-time
+            # Now, collect scheduled times (from scheduled_times) that are later than the latest real-time AND current time
             for schedule in scheduled_times:
                 attributes = schedule.get("attributes", {})
                 departure = attributes.get("departure_time")
                 if departure:
-                    stop_name_sched = schedule.get("stop_name", "Unknown Stop")
-                    if stop_name_sched == stop_name:
-                        dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
-                        time_str = dt.strftime("%I:%M %p")
-                        direction_sched = "outbound" if attributes.get("direction_id", 0) == 0 else "inbound"
-                        if direction_sched == direction and time_str not in seen_times:
-                            # Ensure both datetimes are timezone-aware for comparison
-                            if latest_real_time is None:
-                                # If no real-time predictions, include all scheduled times
-                                scheduled_times_list.append((dt, time_str))
-                                seen_times.add(time_str)
-                            elif latest_real_time.tzinfo is None:
-                                # If latest_real_time is naive, assume it's in the same timezone as dt
-                                latest_real_time = latest_real_time.replace(tzinfo=dt.tzinfo)
-                                if dt > latest_real_time:
+                    # Get stop ID from relationships and then get stop name from cache
+                    stop_id_sched = schedule.get("relationships", {}).get("stop", {}).get("data", {}).get("id")
+                    if stop_id_sched:
+                        stop_name_sched = _stop_info_cache.get(stop_id_sched, "Unknown Stop")
+                        if stop_name_sched == stop_name:
+                            dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
+                            time_str = dt.strftime("%I:%M %p")
+                            direction_sched = "outbound" if attributes.get("direction_id", 0) == 0 else "inbound"
+                            if direction_sched == direction and time_str not in seen_times:
+                                # First, ensure the time is in the future
+                                if dt <= current_time:
+                                    continue  # Skip past times
+                                
+                                # Then, ensure both datetimes are timezone-aware for comparison
+                                if latest_real_time is None:
+                                    # If no real-time predictions, include future scheduled times
                                     scheduled_times_list.append((dt, time_str))
                                     seen_times.add(time_str)
-                            else:
-                                # Both are timezone-aware, compare directly
-                                if dt > latest_real_time:
-                                    scheduled_times_list.append((dt, time_str))
-                                    seen_times.add(time_str)
+                                elif latest_real_time.tzinfo is None:
+                                    # If latest_real_time is naive, assume it's in the same timezone as dt
+                                    latest_real_time = latest_real_time.replace(tzinfo=dt.tzinfo)
+                                    if dt > latest_real_time:
+                                        scheduled_times_list.append((dt, time_str))
+                                        seen_times.add(time_str)
+                                else:
+                                    # Both are timezone-aware, compare directly
+                                    if dt > latest_real_time:
+                                        scheduled_times_list.append((dt, time_str))
+                                        seen_times.add(time_str)
             
             # Sort scheduled times - filter out None values for sorting
             scheduled_times_with_datetime = [(t[0], t[1]) for t in scheduled_times_list if t[0] is not None]
