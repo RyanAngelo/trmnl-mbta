@@ -1,0 +1,20 @@
+# Development overrides
+# This file is automatically used when running docker-compose up
+version: '3.8'
+
+services:
+  trmnl-mbta:
+    # Enable debug mode for development
+    environment:
+      - DEBUG_MODE=true
+      - DEBUG_OUTPUT_FILE=logs/debug.log
+    
+    # Mount source code for live reloading during development
+    volumes:
+      - ./src:/app/src
+      - ./templates:/app/templates
+      - ./config.json:/app/config.json
+      - ./logs:/app/logs
+    
+    # Override command for development
+    command: ["python", "cli.py"]

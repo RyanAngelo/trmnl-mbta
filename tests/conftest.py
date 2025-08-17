@@ -1,6 +1,20 @@
 import json
+import os
+from pathlib import Path
 
 import pytest
+
+# Test configuration file path
+TEST_CONFIG_FILE = Path(__file__).parent / "test_config.json"
+
+
+@pytest.fixture(autouse=True)
+def use_test_config():
+    """Automatically use test config for all tests."""
+    from src.mbta.constants import CONFIG_FILE
+    with pytest.MonkeyPatch().context() as m:
+        m.setattr("src.mbta.constants.CONFIG_FILE", TEST_CONFIG_FILE)
+        yield
 
 
 @pytest.fixture
@@ -21,4 +35,4 @@ def mock_mbta_response():
 @pytest.fixture
 def mock_mbta_stops_response():
     """Mock MBTA API stops response data."""
-    return {"data": [{"attributes": {"name": "Test Stop", "latitude": 42.3601}}]}
+    return {"data": [{"id": "stop_test", "attributes": {"name": "Test Stop", "latitude": 42.3601}}]}

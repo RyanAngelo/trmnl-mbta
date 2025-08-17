@@ -1,0 +1,50 @@
+# Production configuration
+version: '3.8'
+
+services:
+  trmnl-mbta:
+    # Use pre-built image in production
+    # image: your-registry/trmnl-mbta:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: trmnl-mbta-prod
+    restart: always
+    environment:
+      # Production environment variables
+      - MBTA_API_KEY=${MBTA_API_KEY}
+      - TRMNL_WEBHOOK_URL=${TRMNL_WEBHOOK_URL}
+      - DEBUG_MODE=false
+    volumes:
+      # Persistent data
+      - trmnl-config:/app/data
+      - trmnl-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; print('CLI application is healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    networks:
+      - trmnl-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  trmnl-config:
+  trmnl-logs:
+
+networks:
+  trmnl-network:
+    driver: bridge

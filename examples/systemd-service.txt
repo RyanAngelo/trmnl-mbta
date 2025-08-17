@@ -1,0 +1,24 @@
+# Example systemd service file for TRMNL MBTA Schedule Display
+# Save this as /etc/systemd/system/trmnl-mbta.service
+
+[Unit]
+Description=TRMNL MBTA Schedule Display
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/path/to/trmnl-mbta
+Environment=PATH=/path/to/trmnl-mbta/.venv/bin
+ExecStart=/path/to/trmnl-mbta/.venv/bin/python /path/to/trmnl-mbta/cli.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+# Usage:
+# sudo systemctl enable trmnl-mbta
+# sudo systemctl start trmnl-mbta
+# sudo systemctl status trmnl-mbta
+# sudo systemctl stop trmnl-mbta

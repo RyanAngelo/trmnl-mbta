@@ -1,0 +1,14 @@
+# Example cron job for TRMNL MBTA Schedule Display
+# Add to crontab with: crontab -e
+
+# Run every 30 seconds (requires special cron syntax or multiple entries)
+# Note: Most cron implementations don't support seconds, so you might need to use a different approach
+
+# Alternative: Run every minute and let the CLI handle the 30-second interval
+# This runs the CLI continuously, which will update every 30 seconds internally
+* * * * * cd /path/to/trmnl-mbta && /path/to/trmnl-mbta/.venv/bin/python cli.py --once
+
+# Or run every 5 minutes (if you want less frequent updates)
+*/5 * * * * cd /path/to/trmnl-mbta && /path/to/trmnl-mbta/.venv/bin/python cli.py --once
+
+# For continuous operation with 30-second intervals, use systemd service instead

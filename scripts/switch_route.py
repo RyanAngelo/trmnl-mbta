@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-CONFIG_FILE = Path(__file__).parent.parent / "config.json"
+CONFIG_FILE = Path(__file__).parent.parent / "config" / "config.json"
 
 def switch_route(route_id: str):
     """Switch to a different route."""

@@ -2,7 +2,6 @@ import fcntl
 import json
 import logging
 import os
-from fastapi import HTTPException
 
 from src.mbta.constants import CONFIG_FILE
 from src.mbta.models import RouteConfig
@@ -17,13 +16,13 @@ def safe_save_config(config: RouteConfig):
             # Get an exclusive lock
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
-                json.dump(config.dict(), f, indent=2)
+                json.dump(config.model_dump(), f, indent=2)
             finally:
                 # Release the lock
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     except IOError as e:
         logger.error(f"Error saving config: {str(e)}")
-        raise HTTPException(status_code=500, detail="Could not save configuration")
+        raise RuntimeError(f"Could not save configuration: {str(e)}")
 
 def safe_load_config() -> RouteConfig:
     """Load configuration from file with proper error handling."""
@@ -44,4 +43,4 @@ def safe_load_config() -> RouteConfig:
             return RouteConfig(**config_data)
     except (IOError, json.JSONDecodeError) as e:
         logger.error(f"Error loading config: {str(e)}")
-        raise HTTPException(status_code=500, detail="Could not load configuration") 
+        raise RuntimeError(f"Could not load configuration: {str(e)}") 

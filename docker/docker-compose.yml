@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  trmnl-mbta:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: trmnl-mbta
+    restart: unless-stopped
+    environment:
+      # MBTA API Configuration
+      - MBTA_API_KEY=${MBTA_API_KEY}
+      
+      # TRMNL Configuration
+      - TRMNL_WEBHOOK_URL=${TRMNL_WEBHOOK_URL}
+      
+      # Debug Settings
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+      - DEBUG_OUTPUT_FILE=${DEBUG_OUTPUT_FILE:-}
+      
+    volumes:
+      # Mount config file for persistence
+      - ../config/config.json:/app/config.json
+      # Mount logs directory
+      - ../logs:/app/logs
+      # Optional: Mount .env file if you prefer file-based config
+      # - ./.env:/app/.env:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; print('CLI application is healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - trmnl-network
+
+networks:
+  trmnl-network:
+    driver: bridge

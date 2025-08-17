@@ -180,3 +180,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Test configuration files (keep these in version control for consistent test behavior)
+# tests/test_config.json is intentionally NOT ignored as it should be committed

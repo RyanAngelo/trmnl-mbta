@@ -1,0 +1,59 @@
+# Docker-specific Makefile for TRMNL MBTA
+.PHONY: docker-build docker-dev docker-prod docker-stop docker-logs docker-clean docker-shell
+
+# Build Docker image
+docker-build:
+	@echo "🐳 Building Docker image..."
+	docker build -f docker/Dockerfile -t trmnl-mbta:latest ..
+
+# Run in development mode
+docker-dev:
+	@echo "🔧 Starting development environment..."
+	docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
+	@echo "✅ Development environment started"
+
+# Run in production mode  
+docker-prod:
+	@echo "🏭 Starting production environment..."
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+	@echo "✅ Production environment started"
+
+# Stop all services
+docker-stop:
+	@echo "🛑 Stopping Docker services..."
+	docker-compose down
+
+# View logs
+docker-logs:
+	docker-compose logs -f trmnl-mbta
+
+# Clean up Docker resources
+docker-clean:
+	@echo "🧹 Cleaning up Docker resources..."
+	docker-compose down -v --remove-orphans
+	docker system prune -f
+
+# Access container shell
+docker-shell:
+	docker-compose exec trmnl-mbta /bin/bash
+
+# Setup environment file
+docker-setup:
+	@if [ ! -f docker.env ]; then \
+		echo "📝 Creating docker.env from example..."; \
+		cp docker.env.example docker.env; \
+		echo "❗ Please edit docker.env with your configuration"; \
+	else \
+		echo "✅ docker.env already exists"; \
+	fi
+
+# Full deployment workflow
+docker-deploy: docker-setup docker-build docker-dev
+
+# Health check
+docker-health:
+	@echo "🏥 Checking container health..."
+	docker-compose ps
+	@echo ""
+	@echo "📊 Container stats:"
+	docker stats --no-stream trmnl-mbta 2>/dev/null || echo "Container not running"

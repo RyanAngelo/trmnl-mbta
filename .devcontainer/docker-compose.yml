@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      # Mount the workspace
+      - ..:/workspace:cached
+      # Mount Docker socket for docker-in-docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persist VS Code extensions
+      - vscode-extensions:/home/vscode/.vscode-server/extensions
+      # Persist command history
+      - command-history:/home/vscode/.bash_history
+    
+    # Keep container running
+    command: sleep infinity
+    
+    # Environment variables for development
+    environment:
+      - DEBUG_MODE=true
+      - PYTHONPATH=/workspace/src
+      - MBTA_API_KEY=${MBTA_API_KEY:-}
+      - TRMNL_WEBHOOK_URL=${TRMNL_WEBHOOK_URL:-}
+    
+    # Network configuration (no ports needed for CLI application)
+    ports: []
+    
+    networks:
+      - trmnl-dev
+
+volumes:
+  vscode-extensions:
+  command-history:
+
+networks:
+  trmnl-dev:
+    driver: bridge

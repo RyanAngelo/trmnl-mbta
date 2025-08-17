@@ -82,7 +82,7 @@ async def fetch_predictions(route_id: str) -> List[Prediction]:
         "filter[route]": route_id,
         "include": "stop",
         "sort": "stop_sequence",
-        "page[limit]": 100
+        "page[limit]": 500  # Increased limit to get more predictions
     }
 
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:

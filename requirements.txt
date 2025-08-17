@@ -1,7 +1,4 @@
 aiohttp==3.12.14
-fastapi==0.109.2
 pydantic==2.6.1
 python-dotenv==1.0.0
 requests==2.32.4
-slowapi==0.1.9
-uvicorn==0.27.1

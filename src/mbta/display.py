@@ -17,9 +17,13 @@ def convert_to_short_time(time_str: str) -> str:
     """Convert ISO time string to short format (e.g., '2:15p')."""
     if not time_str:
         return ""
-    dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
-    local_time = dt.astimezone()
-    return local_time.strftime("%-I:%M%p").lower().replace(":00", "")
+    try:
+        dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+        local_time = dt.astimezone()
+        return local_time.strftime("%-I:%M%p").lower().replace(":00", "")
+    except ValueError:
+        # Return original string if it's not a valid ISO format
+        return time_str
 
 async def update_trmnl_display(
     line_name: str,
@@ -216,10 +220,17 @@ async def process_predictions(
                             real_times.append((None, time_str))
                             seen_times.add(time_str)
             
-            # Sort real-time
-            real_times_sorted = sorted(real_times, key=lambda x: x[0] if x[0] else x[1])
+            # Sort real-time - filter out None values for sorting, but keep them for display
+            real_times_with_datetime = [(t[0], t[1]) for t in real_times if t[0] is not None]
+            real_times_without_datetime = [(t[0], t[1]) for t in real_times if t[0] is None]
+            
+            # Sort times with valid datetime objects
+            real_times_sorted = sorted(real_times_with_datetime, key=lambda x: x[0])
+            # Add times without datetime at the end (they'll be sorted alphabetically)
+            real_times_sorted.extend(sorted(real_times_without_datetime, key=lambda x: x[1]))
+            
             combined = [t[1] for t in real_times_sorted]
-            latest_real_time = real_times_sorted[-1][0] if real_times_sorted else None
+            latest_real_time = real_times_sorted[-1][0] if real_times_sorted and real_times_sorted[-1][0] is not None else None
             
             # Now, collect scheduled times (from scheduled_times) that are later than the latest real-time
             for schedule in scheduled_times:
@@ -250,7 +261,14 @@ async def process_predictions(
                                     scheduled_times_list.append((dt, time_str))
                                     seen_times.add(time_str)
             
-            scheduled_times_sorted = sorted(scheduled_times_list, key=lambda x: x[0] if x[0] else x[1])
+            # Sort scheduled times - filter out None values for sorting
+            scheduled_times_with_datetime = [(t[0], t[1]) for t in scheduled_times_list if t[0] is not None]
+            scheduled_times_without_datetime = [(t[0], t[1]) for t in scheduled_times_list if t[0] is None]
+            
+            # Sort times with valid datetime objects
+            scheduled_times_sorted = sorted(scheduled_times_with_datetime, key=lambda x: x[0])
+            # Add times without datetime at the end (they'll be sorted alphabetically)
+            scheduled_times_sorted.extend(sorted(scheduled_times_without_datetime, key=lambda x: x[1]))
             if len(combined) < MAX_PREDICTIONS_PER_DIRECTION:
                 combined += [t[1] for t in scheduled_times_sorted[:MAX_PREDICTIONS_PER_DIRECTION-len(combined)]]
             stop_predictions[stop_id][direction] = combined[:MAX_PREDICTIONS_PER_DIRECTION]
@@ -259,4 +277,14 @@ async def process_predictions(
             if stop_name == "Oak Grove":
                 logger.info(f"Oak Grove {direction}: real_times={len(real_times)}, scheduled_times={len(scheduled_times_list)}, combined={combined}")
 
-    return stop_predictions, stop_names 
+    return stop_predictions, stop_names
+
+
+def calculate_prediction_hash(predictions: List[Prediction]) -> int:
+    """Calculate a hash of predictions for change detection."""
+    # Convert None values to empty strings for sorting to avoid comparison errors
+    prediction_tuples = sorted([
+        (pred.route_id, pred.stop_id, pred.departure_time or "", pred.arrival_time or "", pred.direction_id)
+        for pred in predictions
+    ])
+    return hash(str(prediction_tuples)) 

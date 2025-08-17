@@ -1,0 +1,100 @@
+# Development Makefile for TRMNL MBTA
+.PHONY: dev-setup dev-run dev-test dev-format dev-lint dev-clean dev-shell
+
+# Development environment setup
+dev-setup:
+	@echo "🛠️  Setting up development environment..."
+	pip install -e ".[dev]"
+	pre-commit install
+	mkdir -p logs data
+	@echo "✅ Development setup complete!"
+
+# Run the CLI application
+dev-run:
+	@echo "🚀 Starting CLI application..."
+	python cli.py
+
+# Run the CLI application once
+dev-run-once:
+	@echo "🔄 Running CLI application once..."
+	python cli.py --once
+
+# Run tests
+dev-test:
+	@echo "🧪 Running tests..."
+	python -m pytest tests/ -v
+
+# Run tests with coverage
+dev-test-cov:
+	@echo "📊 Running tests with coverage..."
+	python -m pytest tests/ --cov=src --cov-report=html --cov-report=term-missing -v
+
+# Format code
+dev-format:
+	@echo "🎨 Formatting code..."
+	black src/ tests/ --line-length 100
+	isort src/ tests/ --profile black
+
+# Lint code
+dev-lint:
+	@echo "🔍 Linting code..."
+	flake8 src/ tests/ --max-line-length=100
+	bandit -r src/ -c pyproject.toml
+
+# Type checking
+dev-types:
+	@echo "🔎 Running type checks..."
+	mypy src/ --ignore-missing-imports
+
+# Run all quality checks
+dev-check: dev-format dev-lint dev-types dev-test
+
+# Clean development artifacts
+dev-clean:
+	@echo "🧹 Cleaning development artifacts..."
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	rm -rf .pytest_cache .mypy_cache .coverage htmlcov/
+	rm -rf build/ dist/ *.egg-info/
+
+# Interactive shell with environment loaded
+dev-shell:
+	@echo "🐚 Starting development shell..."
+	@PYTHONPATH=src python -c "import sys; print(f'Python {sys.version}'); print('TRMNL MBTA development environment loaded')"
+	@PYTHONPATH=src python
+
+# Install pre-commit hooks and run on all files
+dev-pre-commit:
+	@echo "🪝 Setting up and running pre-commit..."
+	pre-commit install
+	pre-commit run --all-files
+
+# Show development help
+dev-help:
+	@echo "🛠️  TRMNL MBTA Development Commands:"
+	@echo ""
+	@echo "Setup:"
+	@echo "  dev-setup      - Set up development environment"
+	@echo "  dev-pre-commit - Install and run pre-commit hooks"
+	@echo ""
+	@echo "Running:"
+@echo "  dev-run        - Run CLI application"
+@echo "  dev-run-once   - Run CLI application once"
+@echo "  dev-shell      - Interactive Python shell"
+	@echo ""
+	@echo "Testing:"
+	@echo "  dev-test       - Run tests"
+	@echo "  dev-test-cov   - Run tests with coverage"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  dev-format     - Format code (black + isort)"
+	@echo "  dev-lint       - Lint code (flake8 + bandit)"
+	@echo "  dev-types      - Type checking (mypy)"
+	@echo "  dev-check      - Run all quality checks"
+	@echo ""
+	@echo "Maintenance:"
+	@echo "  dev-clean      - Clean artifacts"
+	@echo "  dev-help       - Show this help"
+
+# Default target
+help: dev-help
