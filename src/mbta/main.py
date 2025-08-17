@@ -46,6 +46,9 @@ limiter = Limiter(key_func=get_remote_address)
 # Debug mode flag
 DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
 
+# Global cache for change detection
+_last_prediction_hash = None
+
 # Initialize FastAPI app
 
 
@@ -665,6 +668,15 @@ async def webhook(request: Request) -> Dict[str, Any]:
     return {"status": "success", "predictions_count": len(predictions)}
 
 
+def calculate_prediction_hash(predictions: List[Prediction]) -> int:
+    """Calculate a hash of predictions for change detection."""
+    prediction_tuples = sorted([
+        (pred.route_id, pred.stop_id, pred.departure_time, pred.arrival_time, pred.direction_id)
+        for pred in predictions
+    ])
+    return hash(str(prediction_tuples))
+
+
 async def update_loop() -> None:
     """Main update loop."""
     while True:
@@ -677,12 +689,24 @@ async def update_loop() -> None:
 
 async def run_once() -> None:
     """Run one update cycle."""
+    global _last_prediction_hash
+    
     try:
         config = safe_load_config()
         predictions = await fetch_predictions(config.route_id)
         print(f"Got {len(predictions)} predictions")
-        await update_display(predictions)
-        print("Update complete")
+        
+        # Check if predictions have changed using hash comparison
+        prediction_hash = calculate_prediction_hash(predictions)
+        
+        if prediction_hash != _last_prediction_hash:
+            _last_prediction_hash = prediction_hash
+            await update_display(predictions)
+            print("Update complete - predictions changed")
+        else:
+            logger.info("Predictions unchanged, skipping display update")
+            print("Skipped update - no changes detected")
+            
     except Exception as e:
         logger.error(f"Error running once: {str(e)}")
 

@@ -11,6 +11,9 @@ from mbta.main import (
     update_trmnl_display,
     convert_to_short_time,
     process_predictions,
+    calculate_prediction_hash,
+    run_once,
+    _last_prediction_hash,
 )
 from mbta.api import get_scheduled_times
 from src.mbta.display import _stop_info_cache
@@ -749,3 +752,141 @@ async def test_scheduled_times_used_when_no_predictions():
         assert "stop_0" in stop_predictions
         outbound_times = stop_predictions["stop_0"]["outbound"]
         assert outbound_times == ["10:00 AM", "10:15 AM", "10:30 AM"]
+
+
+def test_calculate_prediction_hash():
+    """Test that prediction hash calculation works correctly."""
+    from src.mbta.models import Prediction
+    
+    # Create identical predictions
+    pred1 = Prediction(
+        route_id="Orange",
+        stop_id="stop1",
+        departure_time="2024-06-21T10:00:00-04:00",
+        arrival_time="2024-06-21T10:00:00-04:00",
+        direction_id=0,
+        status="On time"
+    )
+    pred2 = Prediction(
+        route_id="Orange",
+        stop_id="stop2",
+        departure_time="2024-06-21T10:05:00-04:00",
+        arrival_time="2024-06-21T10:05:00-04:00",
+        direction_id=1,
+        status="On time"
+    )
+    
+    # Test identical predictions produce same hash
+    hash1 = calculate_prediction_hash([pred1, pred2])
+    hash2 = calculate_prediction_hash([pred1, pred2])
+    assert hash1 == hash2
+    
+    # Test different order produces same hash (sorted internally)
+    hash3 = calculate_prediction_hash([pred2, pred1])
+    assert hash1 == hash3
+    
+    # Test different predictions produce different hash
+    pred3 = Prediction(
+        route_id="Orange",
+        stop_id="stop2",
+        departure_time="2024-06-21T10:10:00-04:00",  # Different time
+        arrival_time="2024-06-21T10:10:00-04:00",
+        direction_id=1,
+        status="On time"
+    )
+    hash4 = calculate_prediction_hash([pred1, pred3])
+    assert hash1 != hash4
+    
+    # Test empty predictions
+    empty_hash = calculate_prediction_hash([])
+    assert empty_hash != hash1
+
+
+@pytest.mark.asyncio
+async def test_run_once_change_detection(mock_logger):
+    """Test that run_once only updates display when predictions change."""
+    from src.mbta.models import Prediction
+    import mbta.main
+    
+    # Reset the global hash
+    mbta.main._last_prediction_hash = None
+    
+    # Create mock predictions
+    mock_predictions = [
+        Prediction(
+            route_id="Orange",
+            stop_id="stop1",
+            departure_time="2024-06-21T10:00:00-04:00",
+            arrival_time="2024-06-21T10:00:00-04:00",
+            direction_id=0,
+            status="On time"
+        )
+    ]
+    
+    with patch("mbta.main.safe_load_config") as mock_config, \
+         patch("mbta.main.fetch_predictions") as mock_fetch, \
+         patch("mbta.main.update_display") as mock_update, \
+         patch("builtins.print") as mock_print:
+        
+        mock_config.return_value.route_id = "Orange"
+        mock_fetch.return_value = mock_predictions
+        
+        # First call - should update (no previous hash)
+        await run_once()
+        mock_update.assert_called_once()
+        mock_print.assert_any_call("Update complete - predictions changed")
+        
+        # Reset mocks
+        mock_update.reset_mock()
+        mock_print.reset_mock()
+        
+        # Second call with same predictions - should skip update
+        await run_once()
+        mock_update.assert_not_called()
+        mock_print.assert_any_call("Skipped update - no changes detected")
+        
+        # Reset mocks
+        mock_update.reset_mock()
+        mock_print.reset_mock()
+        
+        # Third call with different predictions - should update
+        different_predictions = [
+            Prediction(
+                route_id="Orange",
+                stop_id="stop1",
+                departure_time="2024-06-21T10:05:00-04:00",  # Different time
+                arrival_time="2024-06-21T10:05:00-04:00",
+                direction_id=0,
+                status="On time"
+            )
+        ]
+        mock_fetch.return_value = different_predictions
+        
+        await run_once()
+        mock_update.assert_called_once()
+        mock_print.assert_any_call("Update complete - predictions changed")
+
+
+@pytest.mark.asyncio 
+async def test_run_once_change_detection_with_error(mock_logger):
+    """Test that run_once handles errors gracefully without breaking change detection."""
+    import mbta.main
+    
+    # Reset the global hash
+    mbta.main._last_prediction_hash = None
+    
+    with patch("mbta.main.safe_load_config") as mock_config, \
+         patch("mbta.main.fetch_predictions") as mock_fetch, \
+         patch("mbta.main.update_display") as mock_update:
+        
+        mock_config.return_value.route_id = "Orange"
+        mock_fetch.side_effect = Exception("API Error")
+        
+        # Should handle error gracefully
+        await run_once()
+        
+        # Should not have called update_display
+        mock_update.assert_not_called()
+        
+        # Should have logged error
+        mock_logger["error"].assert_called_once_with("Error running once: API Error")
