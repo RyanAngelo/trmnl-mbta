@@ -86,7 +86,16 @@ async def update_trmnl_display(
                 TRMNL_WEBHOOK_URL,
                 json={"html": template}
             ) as response:
-                if response.status != 200:
+                if response.status == 200:
+                    logger.info("Successfully updated TRMNL display")
+                elif response.status == 429:
+                    # Rate limited - log and continue (next update is only 30 seconds away)
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after:
+                        logger.warning(f"Rate limited by TRMNL. Retry-After: {retry_after} seconds. Will retry on next update cycle.")
+                    else:
+                        logger.warning(f"Rate limited by TRMNL. Will retry on next update cycle.")
+                else:
                     logger.error(f"Error updating TRMNL display: {response.status}")
     except Exception as e:
         logger.error(f"Error sending update to TRMNL: {str(e)}")
