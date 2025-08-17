@@ -6,7 +6,6 @@ Fetches MBTA predictions and updates TRMNL display without web server overhead.
 
 import asyncio
 import logging
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +15,7 @@ src_path = str(Path(__file__).parent / "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-from mbta.api import fetch_predictions, get_scheduled_times
+from mbta.api import fetch_predictions
 from mbta.config import safe_load_config
 from mbta.display import process_predictions, update_trmnl_display, get_rate_limit_status
 from mbta.models import Prediction
@@ -84,10 +83,10 @@ async def update_display(predictions: list[Prediction]) -> None:
 
 async def update_loop(interval: int = 30) -> None:
     """Main update loop."""
-    print(f"🚇 Starting TRMNL MBTA Schedule Display")
+    print("🚇 Starting TRMNL MBTA Schedule Display")
     print(f"⏰ Update interval: {interval} seconds")
-    print(f"📊 Rate limiting: Max 12 webhooks per hour (1 every 5 minutes)")
-    print(f"🔄 Press Ctrl+C to stop\n")
+    print("📊 Rate limiting: Max 12 webhooks per hour (1 every 5 minutes)")
+    print("🔄 Press Ctrl+C to stop\n")
     
     while True:
         try:

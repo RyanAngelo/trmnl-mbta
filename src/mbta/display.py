@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Any, Tuple
 import aiohttp
 import asyncio
@@ -186,13 +186,13 @@ async def update_trmnl_display(
                     if retry_after:
                         logger.warning(f"Rate limited by TRMNL. Retry-After: {retry_after} seconds. Will retry on next update cycle.")
                     else:
-                        logger.warning(f"Rate limited by TRMNL. Will retry on next update cycle.")
+                        logger.warning("Rate limited by TRMNL. Will retry on next update cycle.")
                 else:
                     # Try to get response body for better error information
                     try:
                         response_text = await response.text()
                         logger.error(f"Error updating TRMNL display: {response.status} - {response_text}")
-                    except:
+                    except Exception:
                         logger.error(f"Error updating TRMNL display: {response.status}")
     except Exception as e:
         logger.error(f"Error sending update to TRMNL: {str(e)}")

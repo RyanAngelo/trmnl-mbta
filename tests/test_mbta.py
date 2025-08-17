@@ -1,14 +1,12 @@
-import asyncio
-import json
 import os
-from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, call, patch
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mbta.api import get_scheduled_times, get_stop_info, get_stop_locations
+from mbta.api import get_stop_info, get_stop_locations, get_scheduled_times
 from mbta.config import safe_load_config
-from mbta.display import update_trmnl_display, process_predictions, _stop_info_cache, convert_to_short_time, calculate_prediction_hash
+from mbta.display import process_predictions, _stop_info_cache, convert_to_short_time, calculate_prediction_hash
 from mbta.constants import STOP_ORDER
 import logging
 

@@ -40,7 +40,7 @@ async def get_stop_info(stop_id: str) -> str:
                 try:
                     error_body = await response.text()
                     logger.error(f"Error response body: {error_body}")
-                except:
+                except Exception:
                     pass
                 # Still cache the stop_id as the name to avoid repeated API calls
                 _stop_info_cache[stop_id] = stop_id
