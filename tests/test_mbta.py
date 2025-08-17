@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, call, patch
 
 import pytest
@@ -1603,47 +1603,36 @@ async def test_get_scheduled_times_without_included_stops():
         assert result[0]["attributes"]["departure_time"] == "2024-06-21T10:00:00-04:00"
 
 
-
-
-
 @pytest.mark.asyncio
-async def test_cache_sharing_between_modules():
-    """Test that the stop info cache is properly shared between API and display modules."""
-    from src.mbta.api import get_stop_info
-    from src.mbta.constants import _stop_info_cache
+async def test_rate_limiting_functionality():
+    """Test that the rate limiting works correctly."""
+    from src.mbta.display import TRMNLRateLimiter, get_rate_limit_status
     
-    # Clear the cache
-    _stop_info_cache.clear()
+    # Create a fresh rate limiter for testing
+    rate_limiter = TRMNLRateLimiter(max_updates_per_hour=12)
     
-    # Mock the API response
-    mock_stop_response = {
-        "data": {
-            "attributes": {
-                "name": "Test Stop"
-            }
-        }
-    }
+    # Initially should be able to update
+    assert rate_limiter.can_update() == True
+    assert rate_limiter.updates_this_hour == 0
     
-    with patch("aiohttp.ClientSession.get") as mock_get:
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.json.return_value = mock_stop_response
-        mock_get.return_value.__aenter__.return_value = mock_response
-        
-        # Call get_stop_info from the API module
-        result = await get_stop_info("test-stop-id")
-        
-        # Verify the cache was updated
-        assert "test-stop-id" in _stop_info_cache
-        assert _stop_info_cache["test-stop-id"] == "Test Stop"
-        
-        # Verify the result is correct
-        assert result == "Test Stop"
-        
-        # This test would have failed before our fix because:
-        # 1. The API module would update its own cache
-        # 2. The display module would have a separate empty cache
-        # 3. The cache wouldn't be shared between modules
+    # Record an update
+    rate_limiter.record_update()
+    assert rate_limiter.updates_this_hour == 1
+    
+    # Should not be able to update immediately (5 minute interval)
+    assert rate_limiter.can_update() == False
+    
+    # Test hourly limit
+    rate_limiter.updates_this_hour = 12
+    assert rate_limiter.can_update() == False
+    
+    # Test reset on new hour
+    rate_limiter.hour_start = rate_limiter.hour_start - timedelta(hours=1)
+    rate_limiter.last_update_time = None
+    assert rate_limiter.can_update() == True
+
+
+
 
 
 

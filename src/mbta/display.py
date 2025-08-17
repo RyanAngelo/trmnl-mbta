@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple
 import aiohttp
 import asyncio
@@ -9,6 +9,60 @@ from src.mbta.models import Prediction
 from src.mbta.api import get_stop_info, get_scheduled_times, get_route_stops
 
 logger = logging.getLogger(__name__)
+
+# Rate limiting for TRMNL webhooks (12 per hour = 1 every 5 minutes)
+class TRMNLRateLimiter:
+    def __init__(self, max_updates_per_hour: int = 12):
+        self.max_updates_per_hour = max_updates_per_hour
+        self.updates_this_hour = 0
+        self.hour_start = datetime.now().replace(minute=0, second=0, microsecond=0)
+        self.min_interval_seconds = 3600 // max_updates_per_hour  # 300 seconds = 5 minutes
+        self.last_update_time = None
+    
+    def can_update(self) -> bool:
+        """Check if we can send an update based on rate limits."""
+        now = datetime.now()
+        
+        # Check if we've moved to a new hour
+        current_hour_start = now.replace(minute=0, second=0, microsecond=0)
+        if current_hour_start > self.hour_start:
+            # New hour, reset counters
+            self.updates_this_hour = 0
+            self.hour_start = current_hour_start
+            self.last_update_time = None
+        
+        # Check if we've hit the hourly limit
+        if self.updates_this_hour >= self.max_updates_per_hour:
+            logger.info(f"Rate limit reached: {self.updates_this_hour}/{self.max_updates_per_hour} updates this hour")
+            return False
+        
+        # Check minimum interval between updates
+        if self.last_update_time:
+            time_since_last = (now - self.last_update_time).total_seconds()
+            if time_since_last < self.min_interval_seconds:
+                logger.debug(f"Rate limiting: {time_since_last:.1f}s since last update, need {self.min_interval_seconds}s")
+                return False
+        
+        return True
+    
+    def record_update(self):
+        """Record that an update was sent."""
+        self.updates_this_hour += 1
+        self.last_update_time = datetime.now()
+        logger.info(f"Webhook sent: {self.updates_this_hour}/{self.max_updates_per_hour} updates this hour")
+
+# Global rate limiter instance
+_rate_limiter = TRMNLRateLimiter()
+
+def get_rate_limit_status() -> Dict[str, Any]:
+    """Get current rate limiting status for display."""
+    return {
+        "updates_this_hour": _rate_limiter.updates_this_hour,
+        "max_updates_per_hour": _rate_limiter.max_updates_per_hour,
+        "can_update": _rate_limiter.can_update(),
+        "min_interval_seconds": _rate_limiter.min_interval_seconds,
+        "last_update_time": _rate_limiter.last_update_time
+    }
 
 def convert_to_short_time(time_str: str) -> str:
     """Convert ISO time string to short format (e.g., '2:15p')."""
@@ -62,6 +116,14 @@ async def update_trmnl_display(
             merge_variables.setdefault(f"i{i}{j}", "")
             merge_variables.setdefault(f"o{i}{j}", "")
 
+    # Check rate limiting before sending to TRMNL
+    if not _rate_limiter.can_update():
+        # Rate limited - fall back to debug mode
+        logger.info("Rate limited - falling back to debug mode")
+        debug_output = format_debug_output(merge_variables, line_name)
+        logger.info(f"Debug output:\n{debug_output}")
+        return
+
     if DEBUG_MODE:
         # In debug mode, output to console instead of sending to TRMNL
         debug_output = format_debug_output(merge_variables, line_name)
@@ -84,6 +146,7 @@ async def update_trmnl_display(
             ) as response:
                 if response.status == 200:
                     logger.info("Successfully updated TRMNL display")
+                    _rate_limiter.record_update()
                 elif response.status == 429:
                     # Rate limited - log and continue (next update is only 30 seconds away)
                     retry_after = response.headers.get("Retry-After")
@@ -99,11 +162,18 @@ async def update_trmnl_display(
 def format_debug_output(merge_variables: Dict[str, str], line_name: str) -> str:
     """Format predictions for debug output."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Count active stops
+    active_stops = sum(1 for i in range(12) if merge_variables.get(f"n{i}", ""))
+    
     output = [
-        f"=== {line_name} Line Predictions ({now}) ===",
-        f"Last Updated: {merge_variables['u']}\n",
-        "Stop Name          | Inbound 1 | Outbound 1 | Inbound 2 | Outbound 2 | Inbound 3 | Outbound 3"
-        "-" * 80
+        f"🚇 {line_name} Line Predictions",
+        f"📅 {now}",
+        f"🕐 Last Updated: {merge_variables['u']}",
+        f"📍 Active Stops: {active_stops}",
+        "",
+        "Stop Name          | Inbound 1 | Outbound 1 | Inbound 2 | Outbound 2 | Inbound 3 | Outbound 3",
+        "=" * 80
     ]
 
     for i in range(12):
@@ -111,17 +181,27 @@ def format_debug_output(merge_variables: Dict[str, str], line_name: str) -> str:
         if not stop_name:
             continue
 
-        row = [
-            f"{stop_name:<16}",
-            f"{merge_variables.get(f'i{i}1', ''):<10}",
-            f"{merge_variables.get(f'o{i}1', ''):<11}",
-            f"{merge_variables.get(f'i{i}2', ''):<10}",
-            f"{merge_variables.get(f'o{i}2', ''):<11}",
-            f"{merge_variables.get(f'i{i}3', ''):<10}",
-            f"{merge_variables.get(f'o{i}3', ''):<10}"
-        ]
-        output.append(" | ".join(row))
+        # Get times for this stop
+        inbound_times = [merge_variables.get(f'i{i}{j}', '') for j in range(1, 4)]
+        outbound_times = [merge_variables.get(f'o{i}{j}', '') for j in range(1, 4)]
+        
+        # Only show stops that have at least one time
+        if any(inbound_times) or any(outbound_times):
+            row = [
+                f"{stop_name:<16}",
+                f"{inbound_times[0]:<10}",
+                f"{outbound_times[0]:<11}",
+                f"{inbound_times[1]:<10}",
+                f"{outbound_times[1]:<11}",
+                f"{inbound_times[2]:<10}",
+                f"{outbound_times[2]:<10}"
+            ]
+            output.append(" | ".join(row))
 
+    output.append("")
+    output.append("💡 Times shown are next departures from each stop")
+    output.append("📊 Rate limit status: Use --once to see current status")
+    
     return "\n".join(output)
 
 async def get_bus_stop_order(route_id: str) -> List[str]:

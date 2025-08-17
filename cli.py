@@ -18,7 +18,7 @@ if src_path not in sys.path:
 
 from mbta.api import fetch_predictions, get_scheduled_times
 from mbta.config import safe_load_config
-from mbta.display import process_predictions, update_trmnl_display
+from mbta.display import process_predictions, update_trmnl_display, get_rate_limit_status
 from mbta.models import Prediction
 
 # Configure logging
@@ -59,6 +59,10 @@ async def run_once() -> None:
         else:
             logger.info("Predictions unchanged, skipping display update")
             print("⏭️  Skipped update - no changes detected")
+        
+        # Show rate limiting status
+        rate_status = get_rate_limit_status()
+        print(f"📊 Rate limit: {rate_status['updates_this_hour']}/{rate_status['max_updates_per_hour']} updates this hour")
             
     except Exception as e:
         logger.error(f"Error running once: {str(e)}")
@@ -82,6 +86,7 @@ async def update_loop(interval: int = 30) -> None:
     """Main update loop."""
     print(f"🚇 Starting TRMNL MBTA Schedule Display")
     print(f"⏰ Update interval: {interval} seconds")
+    print(f"📊 Rate limiting: Max 12 webhooks per hour (1 every 5 minutes)")
     print(f"🔄 Press Ctrl+C to stop\n")
     
     while True:
