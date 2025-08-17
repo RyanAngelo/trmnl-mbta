@@ -10,6 +10,8 @@ services:
       dockerfile: docker/Dockerfile
     container_name: trmnl-mbta-prod
     restart: always
+    env_file:
+      - ../.env
     environment:
       # Production environment variables
       - MBTA_API_KEY=${MBTA_API_KEY}

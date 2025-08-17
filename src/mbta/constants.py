@@ -3,10 +3,24 @@ import re
 from pathlib import Path
 from typing import Pattern
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # python-dotenv not available, continue without it
+    pass
+
 # Load environment variables
 DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
 MBTA_API_KEY = os.getenv("MBTA_API_KEY")
 TRMNL_WEBHOOK_URL = os.getenv("TRMNL_WEBHOOK_URL")
+
+# Validate required environment variables
+if not MBTA_API_KEY:
+    print("WARNING: MBTA_API_KEY environment variable is not set")
+if not TRMNL_WEBHOOK_URL:
+    print("WARNING: TRMNL_WEBHOOK_URL environment variable is not set")
 
 # API Configuration
 MBTA_API_BASE = "https://api-v3.mbta.com"

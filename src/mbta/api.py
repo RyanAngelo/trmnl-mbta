@@ -13,6 +13,15 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)  # 10 seconds timeout
 
 async def get_stop_info(stop_id: str) -> str:
     """Get stop name from stop ID."""
+    # Import here to avoid circular imports
+    from src.mbta.display import _stop_info_cache
+    
+    # Check if we already have this stop in cache
+    if stop_id in _stop_info_cache:
+        return _stop_info_cache[stop_id]
+    
+    logger.debug(f"Fetching stop info for stop_id: {stop_id}")
+    
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
         async with session.get(
             f"{MBTA_API_BASE}/stops/{stop_id}",
@@ -20,9 +29,15 @@ async def get_stop_info(stop_id: str) -> str:
         ) as response:
             if response.status == 200:
                 data = await response.json()
-                return data["data"]["attributes"]["name"]
+                stop_name = data["data"]["attributes"]["name"]
+                # Update the cache
+                _stop_info_cache[stop_id] = stop_name
+                logger.debug(f"Cached stop info: {stop_id} -> {stop_name}")
+                return stop_name
             else:
-                logger.error(f"Error fetching stop info: {response.status}")
+                logger.error(f"Error fetching stop info for {stop_id}: {response.status}")
+                # Still cache the stop_id as the name to avoid repeated API calls
+                _stop_info_cache[stop_id] = stop_id
                 return stop_id
 
 async def get_route_stops(route_id: str) -> List[str]:
@@ -73,7 +88,25 @@ async def get_scheduled_times(route_id: str) -> List[Dict[str, Any]]:
                 logger.warning(f"Failed to fetch scheduled times: {response.status}")
                 return []
             data = await response.json()
-            return data.get("data", [])
+            scheduled_times = data.get("data", [])
+            logger.info(f"Retrieved {len(scheduled_times)} scheduled times for route {route_id}")
+            
+            # Extract stop information from included data
+            included_stops = {}
+            if "included" in data:
+                for item in data["included"]:
+                    if item["type"] == "stop":
+                        included_stops[item["id"]] = item["attributes"]["name"]
+            
+            # Add stop names to scheduled times
+            for schedule in scheduled_times:
+                stop_id = schedule["relationships"]["stop"]["data"]["id"]
+                if stop_id in included_stops:
+                    schedule["stop_name"] = included_stops[stop_id]
+                else:
+                    schedule["stop_name"] = "Unknown Stop"
+            
+            return scheduled_times
 
 async def fetch_predictions(route_id: str) -> List[Prediction]:
     """Fetch predictions for a route."""

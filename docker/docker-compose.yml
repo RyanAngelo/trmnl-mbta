@@ -7,6 +7,8 @@ services:
       dockerfile: docker/Dockerfile
     container_name: trmnl-mbta
     restart: unless-stopped
+    env_file:
+      - ../.env
     environment:
       # MBTA API Configuration
       - MBTA_API_KEY=${MBTA_API_KEY}

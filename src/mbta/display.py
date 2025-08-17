@@ -149,6 +149,7 @@ async def process_predictions(
     # First, get all stop information in parallel if we have predictions
     if predictions:
         unique_stop_ids = {pred.stop_id for pred in predictions}
+        logger.info(f"Loading stop information for {len(unique_stop_ids)} unique stops from predictions: {list(unique_stop_ids)[:5]}...")
         await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
 
     # Group predictions by stop and direction
@@ -170,6 +171,13 @@ async def process_predictions(
     # Always fetch scheduled times to fill gaps when we don't have enough real-time predictions
     logger.info("Fetching scheduled times to supplement real-time predictions")
     scheduled_times = await get_scheduled_times(route_id)
+    logger.info(f"Retrieved {len(scheduled_times)} scheduled times for processing")
+    
+    # Get stop information for all stops in scheduled times
+    if scheduled_times:
+        unique_stop_ids = {schedule["relationships"]["stop"]["data"]["id"] for schedule in scheduled_times}
+        logger.info(f"Loading stop information for {len(unique_stop_ids)} unique stops from scheduled times")
+        await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
     
     # Get the ordered stops for this route
     if route_id in STOP_ORDER:
@@ -237,8 +245,7 @@ async def process_predictions(
                 attributes = schedule.get("attributes", {})
                 departure = attributes.get("departure_time")
                 if departure:
-                    stop_id_sched = schedule["relationships"]["stop"]["data"]["id"]
-                    stop_name_sched = _stop_info_cache.get(stop_id_sched, "Unknown Stop")
+                    stop_name_sched = schedule.get("stop_name", "Unknown Stop")
                     if stop_name_sched == stop_name:
                         dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
                         time_str = dt.strftime("%I:%M %p")
@@ -272,6 +279,10 @@ async def process_predictions(
             if len(combined) < MAX_PREDICTIONS_PER_DIRECTION:
                 combined += [t[1] for t in scheduled_times_sorted[:MAX_PREDICTIONS_PER_DIRECTION-len(combined)]]
             stop_predictions[stop_id][direction] = combined[:MAX_PREDICTIONS_PER_DIRECTION]
+            
+            # Debug: Log what we have for this stop/direction
+            if stop_name == "Oak Grove":
+                logger.info(f"Oak Grove {direction}: real_times={len(real_times)}, scheduled_times={len(scheduled_times_list)}, combined={combined}")
             
             # Debug: Log what we have for this stop/direction
             if stop_name == "Oak Grove":

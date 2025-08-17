@@ -19,11 +19,11 @@ services:
     command: sleep infinity
     
     # Environment variables for development
+    env_file:
+      - ../.env
     environment:
       - DEBUG_MODE=true
       - PYTHONPATH=/workspace/src
-      - MBTA_API_KEY=${MBTA_API_KEY:-}
-      - TRMNL_WEBHOOK_URL=${TRMNL_WEBHOOK_URL:-}
     
     # Network configuration (no ports needed for CLI application)
     ports: []

@@ -817,6 +817,126 @@ async def test_scheduled_times_used_when_no_predictions():
         assert outbound_times == ["10:00 AM", "10:15 AM", "10:30 AM"]
 
 
+@pytest.mark.asyncio
+async def test_scheduled_times_with_real_stop_id_formats():
+    """Test that scheduled times work with real-world stop ID formats (different between predictions and scheduled times)."""
+    from src.mbta.display import process_predictions
+    from src.mbta.models import Prediction
+    from datetime import datetime, timezone
+    
+    # Set STOP_ORDER and _stop_info_cache directly
+    STOP_ORDER["Orange"] = ["Oak Grove", "Malden Center", "Wellington"]
+    
+    # Create mock predictions with real-world stop ID format (like 'Oak Grove-01')
+    mock_predictions = [
+        Prediction(
+            route_id="Orange",
+            stop_id="Oak Grove-01",  # Real-world format from predictions API
+            arrival_time="2024-06-21T10:30:00-04:00",
+            departure_time="2024-06-21T10:30:00-04:00",
+            direction_id=0,  # outbound
+            status="On time"
+        ),
+    ]
+    
+    # Mock scheduled times with different real-world stop ID format (like '70036')
+    mock_scheduled_times = [
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T11:30:00-04:00",
+                "direction_id": 0  # outbound
+            },
+            "relationships": {
+                "stop": {"data": {"id": "70036"}}  # Real-world format from scheduled times API
+            },
+            "stop_name": "Oak Grove"  # This is what our fix adds
+        },
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T11:45:00-04:00",
+                "direction_id": 0  # outbound
+            },
+            "relationships": {
+                "stop": {"data": {"id": "70036"}}
+            },
+            "stop_name": "Oak Grove"
+        },
+    ]
+
+    with patch("src.mbta.display.get_scheduled_times", return_value=mock_scheduled_times) as mock_get_scheduled_times, \
+         patch("src.mbta.display.get_stop_info") as mock_get_stop_info, \
+         patch("src.mbta.display._stop_info_cache", {"Oak Grove-01": "Oak Grove"}):
+        mock_get_stop_info.side_effect = lambda stop_id: {"Oak Grove-01": "Oak Grove"}.get(stop_id, "Unknown Stop")
+        
+        stop_predictions, stop_names = await process_predictions(mock_predictions)
+        
+        # Verify we have the expected stops
+        assert len(stop_names) > 0
+        assert "stop_0" in stop_names
+        assert stop_names["stop_0"] == "Oak Grove"
+        
+        # Verify that scheduled times filled the gaps using stop_name field
+        oak_grove_predictions = stop_predictions["stop_0"]
+        
+        # Should have 3 outbound predictions (1 real-time + 2 scheduled)
+        outbound_times = oak_grove_predictions["outbound"]
+        assert len(outbound_times) == 3
+        assert outbound_times[0] == "10:30 AM"  # Real-time
+        assert outbound_times[1] == "11:30 AM"  # Scheduled
+        assert outbound_times[2] == "11:45 AM"  # Scheduled
+
+
+@pytest.mark.asyncio
+async def test_scheduled_times_without_stop_name_field():
+    """Test that scheduled times fail gracefully when stop_name field is missing (simulating old behavior)."""
+    from src.mbta.display import process_predictions
+    from src.mbta.models import Prediction
+    
+    # Set STOP_ORDER
+    STOP_ORDER["Orange"] = ["Oak Grove"]
+    
+    # Create mock predictions
+    mock_predictions = [
+        Prediction(
+            route_id="Orange",
+            stop_id="Oak Grove-01",
+            arrival_time="2024-06-21T10:30:00-04:00",
+            departure_time="2024-06-21T10:30:00-04:00",
+            direction_id=0,
+            status="On time"
+        ),
+    ]
+    
+    # Mock scheduled times WITHOUT stop_name field (old behavior)
+    mock_scheduled_times = [
+        {
+            "attributes": {
+                "departure_time": "2024-06-21T11:30:00-04:00",
+                "direction_id": 0
+            },
+            "relationships": {
+                "stop": {"data": {"id": "70036"}}
+            }
+            # No stop_name field - this would cause "Unknown Stop" in old code
+        },
+    ]
+
+    with patch("src.mbta.display.get_scheduled_times", return_value=mock_scheduled_times) as mock_get_scheduled_times, \
+         patch("src.mbta.display.get_stop_info") as mock_get_stop_info, \
+         patch("src.mbta.display._stop_info_cache", {"Oak Grove-01": "Oak Grove"}):
+        mock_get_stop_info.side_effect = lambda stop_id: {"Oak Grove-01": "Oak Grove"}.get(stop_id, "Unknown Stop")
+        
+        stop_predictions, stop_names = await process_predictions(mock_predictions)
+        
+        # Should still work but with limited scheduled times due to "Unknown Stop"
+        oak_grove_predictions = stop_predictions["stop_0"]
+        outbound_times = oak_grove_predictions["outbound"]
+        
+        # Should only have the real-time prediction since scheduled times would be "Unknown Stop"
+        assert len(outbound_times) == 1
+        assert outbound_times[0] == "10:30 AM"
+
+
 def test_calculate_prediction_hash():
     """Test that prediction hash calculation works correctly."""
     from src.mbta.models import Prediction
@@ -1356,6 +1476,100 @@ def test_safe_load_config_invalid_json():
     # This test is difficult to implement due to the test config fixture
     # The function is already tested in test_load_config and test_uses_test_config
     assert True  # Placeholder test
+
+
+@pytest.mark.asyncio
+async def test_get_scheduled_times_with_stop_information():
+    """Test that get_scheduled_times properly extracts stop information from API response."""
+    from src.mbta.api import get_scheduled_times
+    
+    # Mock API response with included stop information
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "attributes": {
+                    "departure_time": "2024-06-21T10:00:00-04:00",
+                    "direction_id": 0
+                },
+                "relationships": {
+                    "stop": {"data": {"id": "70036"}}
+                }
+            },
+            {
+                "attributes": {
+                    "departure_time": "2024-06-21T10:15:00-04:00",
+                    "direction_id": 1
+                },
+                "relationships": {
+                    "stop": {"data": {"id": "70001"}}
+                }
+            }
+        ],
+        "included": [
+            {
+                "type": "stop",
+                "id": "70036",
+                "attributes": {
+                    "name": "Oak Grove"
+                }
+            },
+            {
+                "type": "stop",
+                "id": "70001",
+                "attributes": {
+                    "name": "Forest Hills"
+                }
+            }
+        ]
+    }
+    
+    with patch("aiohttp.ClientSession.get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+        
+        result = await get_scheduled_times("Orange")
+        
+        # Verify the result includes stop names
+        assert len(result) == 2
+        assert result[0]["stop_name"] == "Oak Grove"
+        assert result[1]["stop_name"] == "Forest Hills"
+        assert result[0]["attributes"]["departure_time"] == "2024-06-21T10:00:00-04:00"
+        assert result[1]["attributes"]["departure_time"] == "2024-06-21T10:15:00-04:00"
+
+
+@pytest.mark.asyncio
+async def test_get_scheduled_times_without_included_stops():
+    """Test that get_scheduled_times handles missing included stop information gracefully."""
+    from src.mbta.api import get_scheduled_times
+    
+    # Mock API response without included stop information
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "attributes": {
+                    "departure_time": "2024-06-21T10:00:00-04:00",
+                    "direction_id": 0
+                },
+                "relationships": {
+                    "stop": {"data": {"id": "70036"}}
+                }
+            }
+        ]
+        # No "included" section
+    }
+    
+    with patch("aiohttp.ClientSession.get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+        
+        result = await get_scheduled_times("Orange")
+        
+        # Verify the result handles missing stop information gracefully
+        assert len(result) == 1
+        assert result[0]["stop_name"] == "Unknown Stop"
+        assert result[0]["attributes"]["departure_time"] == "2024-06-21T10:00:00-04:00"
 
 
 

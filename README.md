@@ -14,7 +14,12 @@ A lightweight command-line application that fetches real-time MBTA schedule data
    # Edit .env with your API keys
    ```
 
-3. **Run**:
+3. **Verify Environment**:
+   ```bash
+   python scripts/verify_env.py
+   ```
+
+4. **Run**:
    ```bash
    # Test once
    python cli.py --once
@@ -72,3 +77,27 @@ crontab -e
 - Python 3.7+
 - MBTA API key
 - TRMNL webhook URL
+
+## Troubleshooting
+
+### Environment Variables Not Loading
+
+If you see errors like "TRMNL_WEBHOOK_URL not set" even though it's in your `.env` file:
+
+1. **Verify your environment setup**:
+   ```bash
+   python scripts/verify_env.py
+   ```
+
+2. **For Docker deployments**: Make sure your `.env` file is in the project root and Docker Compose is configured to load it.
+
+3. **Check file permissions**: Ensure your `.env` file is readable.
+
+4. **Verify .env format**: Make sure there are no spaces around the `=` sign:
+   ```bash
+   # Correct
+   TRMNL_WEBHOOK_URL=https://api.trmnl.com/your_webhook_url
+   
+   # Incorrect
+   TRMNL_WEBHOOK_URL = https://api.trmnl.com/your_webhook_url
+   ```
