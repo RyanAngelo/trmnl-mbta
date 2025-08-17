@@ -280,9 +280,8 @@ async def process_predictions(
                 combined += [t[1] for t in scheduled_times_sorted[:MAX_PREDICTIONS_PER_DIRECTION-len(combined)]]
             stop_predictions[stop_id][direction] = combined[:MAX_PREDICTIONS_PER_DIRECTION]
             
-            # Debug: Log what we have for this stop/direction
-            if stop_name in ["Oak Grove", "Malden Center", "Wellington", "Assembly", "Sullivan Square"]:
-                logger.info(f"{stop_name} {direction}: real_times={len(real_times)}, scheduled_times={len(scheduled_times_list)}, combined={combined}")
+            # Log summary for this stop/direction
+            logger.info(f"{stop_name} {direction}: real_times={len(real_times)}, scheduled_times={len(scheduled_times_list)}, combined={combined}")
 
     return stop_predictions, stop_names
 
