@@ -93,34 +93,35 @@ async def test_get_stop_locations(mock_mbta_stops_response):
         assert result["stop_test"] == "Test Stop"
 
 
-@pytest.mark.asyncio
-async def test_update_trmnl_display_success(mock_logger):
-    """Test successful TRMNL display update."""
-    # Set environment variable and reload modules
-    os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+    @pytest.mark.asyncio
+    async def test_update_trmnl_display_success(mock_logger):
+        """Test successful TRMNL display update."""
+        # Set environment variable and reload modules
+        os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+        os.environ["DEBUG_MODE"] = "false"  # Disable debug mode to test webhook
     
-    # Reload the modules to pick up the new environment variable
-    import importlib
-    importlib.reload(importlib.import_module("src.mbta.constants"))
-    importlib.reload(importlib.import_module("src.mbta.display"))
+        # Reload the modules to pick up the new environment variable
+        import importlib
+        importlib.reload(importlib.import_module("src.mbta.constants"))
+        importlib.reload(importlib.import_module("src.mbta.display"))
     
-    # Re-import the function after reload
-    from src.mbta.display import update_trmnl_display
+        # Re-import the function after reload
+        from src.mbta.display import update_trmnl_display
     
-    with patch("aiohttp.ClientSession.post") as mock_post:
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_post.return_value.__aenter__.return_value = mock_response
-
-        await update_trmnl_display(
-            line_name="Orange",
-            last_updated="2:15p",
-            stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
-            stop_names={"stop_0": "Oak Grove"},
-        )
-
-        # Check that the webhook was called
-        mock_post.assert_called_once()
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_post.return_value.__aenter__.return_value = mock_response
+    
+            await update_trmnl_display(
+                line_name="Orange",
+                last_updated="2:15p",
+                stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
+                stop_names={"stop_0": "Oak Grove"},
+            )
+    
+            # Check that the webhook was called
+            mock_post.assert_called_once()
         call_args = mock_post.call_args
         json_data = call_args[1]["json"]
         assert json_data["html"] is not None
@@ -132,124 +133,128 @@ async def test_update_trmnl_display_success(mock_logger):
         assert json_data["merge_variables"]["o01"] == "2:25p"
 
 
-@pytest.mark.asyncio
-async def test_update_trmnl_display_rate_limit_with_retry_after(mock_logger):
-    """Test TRMNL display update with rate limit and retry-after header."""
-    # Set environment variable and reload modules
-    os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+    @pytest.mark.asyncio
+    async def test_update_trmnl_display_rate_limit_with_retry_after(mock_logger):
+        """Test TRMNL display update with rate limit and retry-after header."""
+        # Set environment variable and reload modules
+        os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+        os.environ["DEBUG_MODE"] = "false"  # Disable debug mode to test webhook
     
-    # Reload the modules to pick up the new environment variable
-    import importlib
-    importlib.reload(importlib.import_module("src.mbta.constants"))
-    importlib.reload(importlib.import_module("src.mbta.display"))
+        # Reload the modules to pick up the new environment variable
+        import importlib
+        importlib.reload(importlib.import_module("src.mbta.constants"))
+        importlib.reload(importlib.import_module("src.mbta.display"))
     
-    # Re-import the function after reload
-    from src.mbta.display import update_trmnl_display
+        # Re-import the function after reload
+        from src.mbta.display import update_trmnl_display
     
-    with patch("aiohttp.ClientSession.post") as mock_post, \
-         patch("src.mbta.display.logger", mock_logger):
-        mock_response = AsyncMock()
-        mock_response.status = 429
-        mock_response.headers = {"Retry-After": "60"}
-        mock_post.return_value.__aenter__.return_value = mock_response
-
-        await update_trmnl_display(
-            line_name="Orange",
-            last_updated="2:15p",
-            stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
-            stop_names={"stop_0": "Oak Grove"},
-        )
-
-        mock_logger.warning.assert_any_call("Rate limited by TRMNL. Retry-After: 60 seconds. Will retry on next update cycle.")
-
-
-@pytest.mark.asyncio
-async def test_update_trmnl_display_rate_limit_without_retry_after(mock_logger):
-    """Test TRMNL display update with rate limit but no retry-after header."""
-    # Set environment variable and reload modules
-    os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+        with patch("aiohttp.ClientSession.post") as mock_post, \
+             patch("src.mbta.display.logger", mock_logger):
+            mock_response = AsyncMock()
+            mock_response.status = 429
+            mock_response.headers = {"Retry-After": "60"}
+            mock_post.return_value.__aenter__.return_value = mock_response
     
-    # Reload the modules to pick up the new environment variable
-    import importlib
-    importlib.reload(importlib.import_module("src.mbta.constants"))
-    importlib.reload(importlib.import_module("src.mbta.display"))
+            await update_trmnl_display(
+                line_name="Orange",
+                last_updated="2:15p",
+                stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
+                stop_names={"stop_0": "Oak Grove"},
+            )
     
-    # Re-import the function after reload
-    from src.mbta.display import update_trmnl_display
+            mock_logger.warning.assert_any_call("Rate limited by TRMNL. Retry-After: 60 seconds. Will retry on next update cycle.")
+
+
+    @pytest.mark.asyncio
+    async def test_update_trmnl_display_rate_limit_without_retry_after(mock_logger):
+        """Test TRMNL display update with rate limit but no retry-after header."""
+        # Set environment variable and reload modules
+        os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+        os.environ["DEBUG_MODE"] = "false"  # Disable debug mode to test webhook
     
-    with patch("aiohttp.ClientSession.post") as mock_post, \
-         patch("src.mbta.display.logger", mock_logger):
-        mock_response = AsyncMock()
-        mock_response.status = 429
-        mock_response.headers = {}
-        mock_post.return_value.__aenter__.return_value = mock_response
-
-        await update_trmnl_display(
-            line_name="Orange",
-            last_updated="2:15p",
-            stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
-            stop_names={"stop_0": "Oak Grove"},
-        )
-
-        mock_logger.warning.assert_any_call("Rate limited by TRMNL. Will retry on next update cycle.")
-
-
-@pytest.mark.asyncio
-async def test_update_trmnl_display_other_error(mock_logger):
-    """Test TRMNL display update with other HTTP error."""
-    # Set environment variable and reload modules
-    os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+        # Reload the modules to pick up the new environment variable
+        import importlib
+        importlib.reload(importlib.import_module("src.mbta.constants"))
+        importlib.reload(importlib.import_module("src.mbta.display"))
     
-    # Reload the modules to pick up the new environment variable
-    import importlib
-    importlib.reload(importlib.import_module("src.mbta.constants"))
-    importlib.reload(importlib.import_module("src.mbta.display"))
+        # Re-import the function after reload
+        from src.mbta.display import update_trmnl_display
     
-    # Re-import the function after reload
-    from src.mbta.display import update_trmnl_display
+        with patch("aiohttp.ClientSession.post") as mock_post, \
+             patch("src.mbta.display.logger", mock_logger):
+            mock_response = AsyncMock()
+            mock_response.status = 429
+            mock_response.headers = {}
+            mock_post.return_value.__aenter__.return_value = mock_response
     
-    with patch("aiohttp.ClientSession.post") as mock_post, \
-         patch("src.mbta.display.logger", mock_logger):
-        mock_response = AsyncMock()
-        mock_response.status = 500
-        mock_post.return_value.__aenter__.return_value = mock_response
-
-        await update_trmnl_display(
-            line_name="Orange",
-            last_updated="2:15p",
-            stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
-            stop_names={"stop_0": "Oak Grove"},
-        )
-
-        mock_logger.error.assert_any_call("Error updating TRMNL display: 500")
-
-
-@pytest.mark.asyncio
-async def test_update_trmnl_display_network_error(mock_logger):
-    """Test TRMNL display update with network error."""
-    # Set environment variable and reload modules
-    os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+            await update_trmnl_display(
+                line_name="Orange",
+                last_updated="2:15p",
+                stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
+                stop_names={"stop_0": "Oak Grove"},
+            )
     
-    # Reload the modules to pick up the new environment variable
-    import importlib
-    importlib.reload(importlib.import_module("src.mbta.constants"))
-    importlib.reload(importlib.import_module("src.mbta.display"))
-    
-    # Re-import the function after reload
-    from src.mbta.display import update_trmnl_display
-    
-    with patch("aiohttp.ClientSession.post") as mock_post, \
-         patch("src.mbta.display.logger", mock_logger):
-        mock_post.side_effect = Exception("Network error")
+            mock_logger.warning.assert_any_call("Rate limited by TRMNL. Will retry on next update cycle.")
 
-        await update_trmnl_display(
-            line_name="Orange",
-            last_updated="2:15p",
-            stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
-            stop_names={"stop_0": "Oak Grove"},
-        )
 
-        mock_logger.error.assert_any_call("Error sending update to TRMNL: Network error")
+    @pytest.mark.asyncio
+    async def test_update_trmnl_display_other_error(mock_logger):
+        """Test TRMNL display update with other HTTP error."""
+        # Set environment variable and reload modules
+        os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+        os.environ["DEBUG_MODE"] = "false"  # Disable debug mode to test webhook
+    
+        # Reload the modules to pick up the new environment variable
+        import importlib
+        importlib.reload(importlib.import_module("src.mbta.constants"))
+        importlib.reload(importlib.import_module("src.mbta.display"))
+    
+        # Re-import the function after reload
+        from src.mbta.display import update_trmnl_display
+    
+        with patch("aiohttp.ClientSession.post") as mock_post, \
+             patch("src.mbta.display.logger", mock_logger):
+            mock_response = AsyncMock()
+            mock_response.status = 500
+            mock_post.return_value.__aenter__.return_value = mock_response
+    
+            await update_trmnl_display(
+                line_name="Orange",
+                last_updated="2:15p",
+                stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
+                stop_names={"stop_0": "Oak Grove"},
+            )
+    
+            mock_logger.error.assert_any_call("Error updating TRMNL display: 500")
+
+
+    @pytest.mark.asyncio
+    async def test_update_trmnl_display_network_error(mock_logger):
+        """Test TRMNL display update with network error."""
+        # Set environment variable and reload modules
+        os.environ["TRMNL_WEBHOOK_URL"] = "https://api.trmnl.com/test"
+        os.environ["DEBUG_MODE"] = "false"  # Disable debug mode to test webhook
+    
+        # Reload the modules to pick up the new environment variable
+        import importlib
+        importlib.reload(importlib.import_module("src.mbta.constants"))
+        importlib.reload(importlib.import_module("src.mbta.display"))
+    
+        # Re-import the function after reload
+        from src.mbta.display import update_trmnl_display
+    
+        with patch("aiohttp.ClientSession.post") as mock_post, \
+             patch("src.mbta.display.logger", mock_logger):
+            mock_post.side_effect = Exception("Network error")
+    
+            await update_trmnl_display(
+                line_name="Orange",
+                last_updated="2:15p",
+                stop_predictions={"stop_0": {"inbound": ["2:20p"], "outbound": ["2:25p"]}},
+                stop_names={"stop_0": "Oak Grove"},
+            )
+    
+            mock_logger.error.assert_any_call("Error sending update to TRMNL: Network error")
 
 
 def test_convert_to_short_time():
@@ -659,8 +664,8 @@ async def test_time_sorting_chronological(mock_current_time):
         ),
     ]
     
-    # Mock the stop info cache
-    with patch("src.mbta.display._stop_info_cache", {
+    # Mock the stop info cache - use the new location
+    with patch("src.mbta.constants._stop_info_cache", {
         "stop_oak_grove": "Oak Grove"
     }):
         # Process the predictions
@@ -1596,6 +1601,49 @@ async def test_get_scheduled_times_without_included_stops():
         assert len(result) == 1
         assert result[0]["stop_name"] == "Unknown Stop"
         assert result[0]["attributes"]["departure_time"] == "2024-06-21T10:00:00-04:00"
+
+
+
+
+
+@pytest.mark.asyncio
+async def test_cache_sharing_between_modules():
+    """Test that the stop info cache is properly shared between API and display modules."""
+    from src.mbta.api import get_stop_info
+    from src.mbta.constants import _stop_info_cache
+    
+    # Clear the cache
+    _stop_info_cache.clear()
+    
+    # Mock the API response
+    mock_stop_response = {
+        "data": {
+            "attributes": {
+                "name": "Test Stop"
+            }
+        }
+    }
+    
+    with patch("aiohttp.ClientSession.get") as mock_get:
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json.return_value = mock_stop_response
+        mock_get.return_value.__aenter__.return_value = mock_response
+        
+        # Call get_stop_info from the API module
+        result = await get_stop_info("test-stop-id")
+        
+        # Verify the cache was updated
+        assert "test-stop-id" in _stop_info_cache
+        assert _stop_info_cache["test-stop-id"] == "Test Stop"
+        
+        # Verify the result is correct
+        assert result == "Test Stop"
+        
+        # This test would have failed before our fix because:
+        # 1. The API module would update its own cache
+        # 2. The display module would have a separate empty cache
+        # 3. The cache wouldn't be shared between modules
 
 
 

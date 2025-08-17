@@ -4,14 +4,11 @@ from typing import Dict, List, Any, Tuple
 import aiohttp
 import asyncio
 
-from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER, MAX_PREDICTIONS_PER_DIRECTION
+from src.mbta.constants import TEMPLATE_PATH, TRMNL_WEBHOOK_URL, DEBUG_MODE, STOP_ORDER, MAX_PREDICTIONS_PER_DIRECTION, _stop_info_cache
 from src.mbta.models import Prediction
 from src.mbta.api import get_stop_info, get_scheduled_times, get_route_stops
 
 logger = logging.getLogger(__name__)
-
-# Cache for stop information
-_stop_info_cache = {}
 
 def convert_to_short_time(time_str: str) -> str:
     """Convert ISO time string to short format (e.g., '2:15p')."""
@@ -154,11 +151,42 @@ async def process_predictions(
     # Get the route ID from the first prediction or use default
     route_id = predictions[0].route_id if predictions else "Orange"  # Default to Orange if no predictions
 
+    # Debug: Log some sample predictions
+    logger.info(f"Processing {len(predictions)} predictions for route {route_id}")
+    if predictions:
+        sample_pred = predictions[0]
+        logger.info(f"Sample prediction: route_id={sample_pred.route_id}, stop_id={sample_pred.stop_id}, "
+                   f"departure_time={sample_pred.departure_time}, arrival_time={sample_pred.arrival_time}, "
+                   f"direction_id={sample_pred.direction_id}")
+
     # First, get all stop information in parallel if we have predictions
     if predictions:
         unique_stop_ids = {pred.stop_id for pred in predictions}
         logger.info(f"Loading stop information for {len(unique_stop_ids)} unique stops from predictions: {list(unique_stop_ids)[:5]}...")
-        await asyncio.gather(*[get_stop_info(stop_id) for stop_id in unique_stop_ids])
+        
+        # Add detailed logging for stop info gathering
+        logger.info("Starting to gather stop information...")
+        stop_info_tasks = [get_stop_info(stop_id) for stop_id in unique_stop_ids]
+        stop_info_results = await asyncio.gather(*stop_info_tasks, return_exceptions=True)
+        
+        # Log results
+        successful_stops = 0
+        failed_stops = 0
+        for i, result in enumerate(stop_info_results):
+            stop_id = list(unique_stop_ids)[i]
+            if isinstance(result, Exception):
+                logger.error(f"Failed to get stop info for {stop_id}: {result}")
+                failed_stops += 1
+            else:
+                logger.debug(f"Successfully got stop info for {stop_id}: {result}")
+                successful_stops += 1
+        
+        logger.info(f"Stop info gathering complete: {successful_stops} successful, {failed_stops} failed")
+        
+        # Debug: Check cache contents right after gathering
+        logger.info(f"Cache contents after gathering: {len(_stop_info_cache)} entries")
+        for stop_id, stop_name in list(_stop_info_cache.items())[:5]:  # Show first 5
+            logger.info(f"  {stop_id} -> {stop_name}")
 
     # Group predictions by stop and direction
     stop_times = {}  # type: Dict[str, Dict[str, List[str]]]
@@ -167,6 +195,7 @@ async def process_predictions(
         if departure:
             stop_name = _stop_info_cache.get(pred.stop_id, "Unknown Stop")
             if stop_name == "Unknown Stop":
+                logger.debug(f"Skipping prediction for unknown stop: {pred.stop_id}")
                 continue
             if stop_name not in stop_times:
                 stop_times[stop_name] = {"inbound": [], "outbound": []}
@@ -175,11 +204,29 @@ async def process_predictions(
             # Swap direction mapping: 0 = outbound (toward Oak Grove), 1 = inbound (toward Forest Hills)
             direction = "outbound" if pred.direction_id == 0 else "inbound"
             stop_times[stop_name][direction].append(time_str)
+            logger.debug(f"Added prediction: {stop_name} {direction} {time_str}")
+            
+    # Debug: Log what we found in stop_times
+    logger.info(f"Found real-time predictions for {len(stop_times)} stops: {list(stop_times.keys())}")
+    for stop_name, directions in stop_times.items():
+        logger.info(f"  {stop_name}: inbound={len(directions['inbound'])}, outbound={len(directions['outbound'])}")
+    
+    # Debug: Log what's in the stop cache
+    logger.info(f"Stop cache contains {len(_stop_info_cache)} entries")
+    for stop_id, stop_name in list(_stop_info_cache.items())[:10]:  # Show first 10
+        logger.info(f"  {stop_id} -> {stop_name}")
             
     # Always fetch scheduled times to fill gaps when we don't have enough real-time predictions
     logger.info("Fetching scheduled times to supplement real-time predictions")
     scheduled_times = await get_scheduled_times(route_id)
     logger.info(f"Retrieved {len(scheduled_times)} scheduled times for processing")
+    
+    # Debug: Log some sample scheduled times
+    if scheduled_times:
+        sample_sched = scheduled_times[0]
+        logger.info(f"Sample scheduled time: stop_id={sample_sched.get('relationships', {}).get('stop', {}).get('data', {}).get('id')}, "
+                   f"departure_time={sample_sched.get('attributes', {}).get('departure_time')}, "
+                   f"direction_id={sample_sched.get('attributes', {}).get('direction_id')}")
     
     # Get stop information for all stops in scheduled times
     if scheduled_times:
@@ -194,6 +241,8 @@ async def process_predictions(
     else:
         # For bus routes, get the stop order dynamically
         ordered_stops = await get_bus_stop_order(route_id)
+
+    logger.info(f"Using ordered stops: {ordered_stops[:5]}...")
 
     # Process each stop in the correct order, even if there are no predictions
     for stop_idx, stop_name in enumerate(ordered_stops[:12]):  # Limit to 12 stops
@@ -234,6 +283,7 @@ async def process_predictions(
                         
                         # Filter out past times
                         if time_obj and time_obj <= current_time:
+                            logger.debug(f"Filtering out past time: {time_str} (current: {current_time.strftime('%I:%M %p')})")
                             continue  # Skip past times
                             
                         if time_str not in seen_times:
@@ -272,6 +322,7 @@ async def process_predictions(
                             if direction_sched == direction and time_str not in seen_times:
                                 # First, ensure the time is in the future
                                 if dt <= current_time:
+                                    logger.debug(f"Filtering out past scheduled time: {time_str} for {stop_name}")
                                     continue  # Skip past times
                                 
                                 # Then, ensure both datetimes are timezone-aware for comparison
@@ -279,17 +330,20 @@ async def process_predictions(
                                     # If no real-time predictions, include future scheduled times
                                     scheduled_times_list.append((dt, time_str))
                                     seen_times.add(time_str)
+                                    logger.debug(f"Added scheduled time (no real-time): {time_str} for {stop_name}")
                                 elif latest_real_time.tzinfo is None:
                                     # If latest_real_time is naive, assume it's in the same timezone as dt
                                     latest_real_time = latest_real_time.replace(tzinfo=dt.tzinfo)
                                     if dt > latest_real_time:
                                         scheduled_times_list.append((dt, time_str))
                                         seen_times.add(time_str)
+                                        logger.debug(f"Added scheduled time (after real-time): {time_str} for {stop_name}")
                                 else:
                                     # Both are timezone-aware, compare directly
                                     if dt > latest_real_time:
                                         scheduled_times_list.append((dt, time_str))
                                         seen_times.add(time_str)
+                                        logger.debug(f"Added scheduled time (after real-time): {time_str} for {stop_name}")
             
             # Sort scheduled times - filter out None values for sorting
             scheduled_times_with_datetime = [(t[0], t[1]) for t in scheduled_times_list if t[0] is not None]

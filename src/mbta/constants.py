@@ -37,6 +37,9 @@ VALID_STOP_PATTERN: Pattern = re.compile(r"^[a-zA-Z0-9-]+$")
 # Display configuration
 MAX_PREDICTIONS_PER_DIRECTION = 3  # Maximum number of predictions to show per direction per stop
 
+# Global cache for stop information (to avoid circular imports)
+_stop_info_cache = {}
+
 # Stop order for each line (inbound direction) - only for subway lines
 STOP_ORDER = {
     "Orange": [

@@ -14,7 +14,7 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)  # 10 seconds timeout
 async def get_stop_info(stop_id: str) -> str:
     """Get stop name from stop ID."""
     # Import here to avoid circular imports
-    from src.mbta.display import _stop_info_cache
+    from src.mbta.constants import _stop_info_cache
     
     # Check if we already have this stop in cache
     if stop_id in _stop_info_cache:
@@ -36,6 +36,12 @@ async def get_stop_info(stop_id: str) -> str:
                 return stop_name
             else:
                 logger.error(f"Error fetching stop info for {stop_id}: {response.status}")
+                # Log the response body for debugging
+                try:
+                    error_body = await response.text()
+                    logger.error(f"Error response body: {error_body}")
+                except:
+                    pass
                 # Still cache the stop_id as the name to avoid repeated API calls
                 _stop_info_cache[stop_id] = stop_id
                 return stop_id
