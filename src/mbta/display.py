@@ -281,12 +281,8 @@ async def process_predictions(
             stop_predictions[stop_id][direction] = combined[:MAX_PREDICTIONS_PER_DIRECTION]
             
             # Debug: Log what we have for this stop/direction
-            if stop_name == "Oak Grove":
-                logger.info(f"Oak Grove {direction}: real_times={len(real_times)}, scheduled_times={len(scheduled_times_list)}, combined={combined}")
-            
-            # Debug: Log what we have for this stop/direction
-            if stop_name == "Oak Grove":
-                logger.info(f"Oak Grove {direction}: real_times={len(real_times)}, scheduled_times={len(scheduled_times_list)}, combined={combined}")
+            if stop_name in ["Oak Grove", "Malden Center", "Wellington", "Assembly", "Sullivan Square"]:
+                logger.info(f"{stop_name} {direction}: real_times={len(real_times)}, scheduled_times={len(scheduled_times_list)}, combined={combined}")
 
     return stop_predictions, stop_names
 
