@@ -325,8 +325,8 @@ async def process_predictions(
                 stop_times[stop_name] = {"inbound": [], "outbound": []}
             dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
             time_str = dt.strftime("%I:%M %p")
-            # Swap direction mapping: 0 = outbound (toward Oak Grove), 1 = inbound (toward Forest Hills)
-            direction = "outbound" if pred.direction_id == 0 else "inbound"
+            # Direction mapping: 0 = inbound (toward city), 1 = outbound (away from city)
+            direction = "inbound" if pred.direction_id == 0 else "outbound"
             stop_times[stop_name][direction].append(time_str)
             logger.debug(f"Added prediction: {stop_name} {direction} {time_str}")
             
@@ -442,7 +442,7 @@ async def process_predictions(
                         if stop_name_sched == stop_name:
                             dt = datetime.fromisoformat(departure.replace("Z", "+00:00"))
                             time_str = dt.strftime("%I:%M %p")
-                            direction_sched = "outbound" if attributes.get("direction_id", 0) == 0 else "inbound"
+                            direction_sched = "inbound" if attributes.get("direction_id", 0) == 0 else "outbound"
                             if direction_sched == direction and time_str not in seen_times:
                                 # First, ensure the time is in the future
                                 if dt <= current_time:

@@ -17,6 +17,17 @@ def use_test_config():
         yield
 
 
+@pytest.fixture(autouse=True)
+def clear_stop_cache():
+    """Clear the stop info cache between tests to prevent test interference."""
+    from src.mbta.constants import _stop_info_cache
+    # Clear the cache before each test
+    _stop_info_cache.clear()
+    yield
+    # Clear the cache after each test
+    _stop_info_cache.clear()
+
+
 @pytest.fixture
 def test_config_file(tmp_path):
     """Create a temporary config file for testing."""
